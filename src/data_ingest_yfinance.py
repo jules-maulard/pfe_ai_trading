@@ -6,14 +6,14 @@ Purpose
 -------
 A small, dependency-light module to fetch OHLCV market data from Yahoo Finance
 using the free `yfinance` package, then normalize and persist it locally
-(CSV or Parquet). Designed for quick MVP workflows.
+(CSV only). Designed for quick MVP workflows.
 
 Features
 --------
 - Batch download for multiple tickers via `yfinance.download`.
 - Clean, tidy output schema: [symbol, date, open, high, low, close, adj_close, volume].
 - Optional auto-adjusted prices.
-- Save to CSV or Parquet (partition by symbol optional).
+- Save to CSV (partition by symbol optional).
 - Simple retry with exponential backoff.
 - CLI usage for ad-hoc runs.
 
@@ -25,13 +25,13 @@ Notes
 
 Examples
 --------
-Fetch SBF120 subset, daily, and save to Parquet:
+Fetch SBF120 subset, daily, and save to CSV:
     python -m src.data_ingest_yfinance \
         --tickers "AI.PA,SU.PA,DG.PA" \
         --start 2018-01-01 --end 2026-02-19 \
         --interval 1d \
         --out-dir data/prices \
-        --format parquet
+        --format csv
 
 Fetch a single ticker and save CSVs per symbol:
     python -m src.data_ingest_yfinance \
@@ -222,7 +222,7 @@ def fetch_ohlcv(cfg: FetchConfig) -> pd.DataFrame:
 def save_prices(
     df: pd.DataFrame,
     out_dir: str,
-    fmt: str = "parquet",
+    fmt: str = "csv",
     partition_by_symbol: bool = False,
 ) -> None:
     """Save prices to disk in a tidy, reproducible way.
@@ -231,16 +231,13 @@ def save_prices(
     ----------
     df : DataFrame with columns [symbol, date, open, high, low, close, adj_close, volume]
     out_dir : base directory to write files
-    fmt : "parquet" or "csv"
+    fmt : "csv" format only
     partition_by_symbol : if True, writes one file per symbol under out_dir/{symbol}/
                           else writes a single consolidated file per format.
     """
     os.makedirs(out_dir, exist_ok=True)
     fmt = fmt.lower()
-    allowed = {"csv", "parquet"}
-    if fmt not in allowed:
-        raise ValueError(f"Unsupported format '{fmt}'. Use one of {allowed}.")
-
+    
     base_cols = ["symbol", "date", "open", "high", "low", "close", "adj_close", "volume"]
     missing = [c for c in base_cols if c not in df.columns]
     if missing:
@@ -251,19 +248,11 @@ def save_prices(
             sym = (sym or "UNKNOWN").replace("/", "-")
             subdir = os.path.join(out_dir, sym)
             os.makedirs(subdir, exist_ok=True)
-            if fmt == "csv":
-                out_path = os.path.join(subdir, f"prices_{sym}.csv")
-                g.to_csv(out_path, index=False)
-            else:
-                out_path = os.path.join(subdir, f"prices_{sym}.parquet")
-                g.to_parquet(out_path, index=False, engine="pyarrow")
+            out_path = os.path.join(subdir, f"prices_{sym}.csv")
+            g.to_csv(out_path, index=False)
     else:
-        if fmt == "csv":
-            out_path = os.path.join(out_dir, "prices.csv")
-            df.to_csv(out_path, index=False)
-        else:
-            out_path = os.path.join(out_dir, "prices.parquet")
-            df.to_parquet(out_path, index=False, engine="pyarrow")
+        out_path = os.path.join(out_dir, "prices.csv")
+        df.to_csv(out_path, index=False)
 
 
 # -------------------------
@@ -276,7 +265,7 @@ def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
     p.add_argument("--end", type=str, default=None, help="End date YYYY-MM-DD (optional)")
     p.add_argument("--interval", type=str, default="1d", help="Interval: 1d,1wk,1mo (intraday like 1m,5m if needed)")
     p.add_argument("--out-dir", type=str, default="data/prices", help="Output directory")
-    p.add_argument("--format", type=str, default="parquet", choices=["csv", "parquet"], help="Output format")
+    p.add_argument("--format", type=str, default="csv", choices=["csv"], help="Output format")
     p.add_argument("--no-auto-adjust", action="store_true", help="Disable auto-adjusted prices")
     p.add_argument("--partition-by-symbol", action="store_true", help="Write one file per symbol")
     return p.parse_args(argv)
