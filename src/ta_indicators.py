@@ -11,7 +11,58 @@ Output: same DataFrame with an added RSI column (e.g., 'rsi14').
 from __future__ import annotations
 import pandas as pd
 
-def compute_rsi_wilder(df: pd.DataFrame, price_col: str = "adj_close", window: int = 14) -> pd.DataFrame:
+def compute_macd(
+    df: pd.DataFrame,
+    price_col: str = "close",
+    fast: int = 12,
+    slow: int = 26,
+    signal: int = 9,
+) -> pd.DataFrame:
+    """
+    Compute MACD (Moving Average Convergence Divergence) for each symbol.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        Must contain columns ['symbol', 'date', price_col].
+    price_col : str
+        Column to use for price (default: 'close').
+    fast : int
+        Fast EMA period (default: 12).
+    slow : int
+        Slow EMA period (default: 26).
+    signal : int
+        Signal EMA period (default: 9).
+
+    Returns
+    -------
+    pandas.DataFrame
+        Copy of input with added columns: 'macd', 'macd_signal', 'macd_hist'.
+    """
+    required = {"symbol", "date", price_col}
+    if not required.issubset(df.columns):
+        missing = required - set(df.columns)
+        raise ValueError(f"Missing required columns: {sorted(missing)}")
+
+    out = df.copy()
+    out = out.sort_values(["symbol", "date"])
+
+    def _one(g: pd.DataFrame) -> pd.DataFrame:
+        ema_fast = g[price_col].ewm(span=fast, adjust=False, min_periods=fast).mean()
+        ema_slow = g[price_col].ewm(span=slow, adjust=False, min_periods=slow).mean()
+        macd_line = ema_fast - ema_slow
+        signal_line = macd_line.ewm(span=signal, adjust=False, min_periods=signal).mean()
+        histogram = macd_line - signal_line
+        g["macd"] = macd_line
+        g["macd_signal"] = signal_line
+        g["macd_hist"] = histogram
+        return g
+
+    out = out.groupby("symbol", group_keys=False).apply(_one)
+    return out
+
+
+def compute_rsi_wilder(df: pd.DataFrame, price_col: str = "close", window: int = 14) -> pd.DataFrame:
     """
     Compute Wilder's RSI for each symbol in a tidy OHLCV DataFrame.
 
