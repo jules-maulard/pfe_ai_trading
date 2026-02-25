@@ -1,4 +1,5 @@
 yfinance
 pandas
+duckdb
 fastmcp
-openai
+groq
