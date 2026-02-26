@@ -27,8 +27,6 @@ class MACDService:
         symbols: Optional[List[str]] = None,
         start: Optional[str] = None,
         end: Optional[str] = None,
-        save: bool = False,
-        save_path: str = "data/indicators/macd.csv",
         sample_rows: int = 5,
     ) -> Dict[str, Any]:
         df = self.storage.load_prices(symbols=symbols, start=start, end=end)
@@ -47,16 +45,11 @@ class MACDService:
             .reset_index(drop=True)
         )
 
-        saved_to = None
-        if save:
-            saved_to = self.storage.save_indicator(result, save_path)
-
         sample = self._make_sample(result, sample_rows)
 
         return {
             "status": "ok",
             "count": int(len(result)),
-            "saved_to": saved_to,
             "columns": ["symbol", "date", "macd", "macd_signal", "macd_hist"],
             "sample": sample,
         }

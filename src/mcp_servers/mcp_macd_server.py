@@ -33,14 +33,12 @@ def compute_macd_tool(
     symbols: Optional[List[str]] = None,
     start: Optional[str] = None,
     end: Optional[str] = None,
-    save: bool = False,
-    save_path: str = "data/indicators/macd.csv",
     sample_rows: int = 5,
 ) -> Dict[str, Any]:
     return macd_service.compute(
         fast=fast, slow=slow, signal=signal,
         price_col=price_col, symbols=symbols, start=start, end=end,
-        save=save, save_path=save_path, sample_rows=sample_rows,
+        sample_rows=sample_rows,
     )
 
 
