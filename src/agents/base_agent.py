@@ -5,7 +5,12 @@ import asyncio
 import json
 import os
 import sys
+from pathlib import Path
 from typing import Any, Dict, List
+
+from dotenv import load_dotenv
+
+load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 
 try:
     from groq import AsyncGroq
@@ -190,8 +195,8 @@ async def run_agent(agent_name: str, mcp_server_script: str, system_prompt: str,
 
     api_key = os.environ.get("GROQ_API_KEY") or os.environ.get("OPENAI_API_KEY")
     if not api_key or not api_key.startswith("gsk_"):
-        print("GROQ_API_KEY not set or invalid. Example:")
-        print("  set GROQ_API_KEY=gsk-...")
+        print("GROQ_API_KEY not set or invalid.")
+        print("Add it to the .env file at the project root (see .env.example).")
         sys.exit(1)
 
     agent = BaseMCPAgent(mcp_server_script, system_prompt, model=args.model)
