@@ -11,7 +11,6 @@ import pandas as pd
 from typing import Any, Dict, List, Optional
 
 from data.duckdb_csv_storage import DuckDbCsvStorage
-from mcp_servers.ta_indicators import compute_macd
 
 
 class MACDService:
@@ -36,7 +35,7 @@ class MACDService:
         if missing:
             raise ValueError(f"Missing columns: {sorted(missing)}")
 
-        out = compute_macd(df, price_col=price_col, fast=fast, slow=slow, signal=signal)
+        out = self.compute_macd(df, price_col=price_col, fast=fast, slow=slow, signal=signal)
 
         result = (
             out[["symbol", "date", "macd", "macd_signal", "macd_hist"]]
@@ -53,6 +52,34 @@ class MACDService:
             "columns": ["symbol", "date", "macd", "macd_signal", "macd_hist"],
             "sample": sample,
         }
+
+    @staticmethod
+    def compute_macd(
+        df: pd.DataFrame,
+        price_col: str = "close",
+        fast: int = 12,
+        slow: int = 26,
+        signal: int = 9,
+    ) -> pd.DataFrame:
+        required = {"symbol", "date", price_col}
+        if not required.issubset(df.columns):
+            raise ValueError(
+                f"Missing required columns: {sorted(required - set(df.columns))}"
+            )
+
+        out = df.copy().sort_values(["symbol", "date"])
+        parts = []
+        for _, g in out.groupby("symbol"):
+            g = g.copy()
+            ema_fast = g[price_col].ewm(span=fast, adjust=False, min_periods=fast).mean()
+            ema_slow = g[price_col].ewm(span=slow, adjust=False, min_periods=slow).mean()
+            macd_line = ema_fast - ema_slow
+            signal_line = macd_line.ewm(span=signal, adjust=False, min_periods=signal).mean()
+            g["macd"] = macd_line
+            g["macd_signal"] = signal_line
+            g["macd_hist"] = macd_line - signal_line
+            parts.append(g)
+        return pd.concat(parts, ignore_index=True)
 
     @staticmethod
     def _make_sample(df: pd.DataFrame, n: int) -> list:
