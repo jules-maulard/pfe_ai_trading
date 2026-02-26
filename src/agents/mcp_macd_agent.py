@@ -15,11 +15,11 @@ except ImportError:
 
 from fastmcp import Client
 
-MCP_SERVER_SCRIPT = "src/mcp_servers/mcp_rsi_server.py"
+MCP_SERVER_SCRIPT = "src/mcp_servers/mcp_macd_server.py"
 
 BASE_SYSTEM_PROMPT = """\
 You are an expert financial technical analysis assistant.
-You have access to an MCP server exposing tools to compute RSI indicators \
+You have access to an MCP server exposing tools to compute MACD indicators \
 on local OHLCV data (CSV) produced by a yfinance ingester.
 
 Available data:
@@ -29,8 +29,8 @@ Available data:
 
 When the user requests a computation:
 1. Use health_check if you have any doubt about the server.
-2. Call compute_rsi with the appropriate parameters.
-3. Interpret the results (RSI: overbought >70, oversold <30, neutral 30-70).
+2. Call compute_macd with the appropriate parameters.
+3. Interpret the results (bullish/bearish crossovers, histogram direction, divergence).
 4. Give contextual advice based on the values.
 
 Be precise, concise, and use the actual data returned by the tools.
@@ -177,7 +177,7 @@ class MCPAgent:
 
 async def interactive_loop(agent: MCPAgent):
     print("\n" + "=" * 60)
-    print("  RSI MCP Agent — Technical Analysis Assistant")
+    print("  MACD MCP Agent — Technical Analysis Assistant")
     print("=" * 60)
     print("Commands:")
     print("  /reset   — Reset conversation")
@@ -215,7 +215,7 @@ async def interactive_loop(agent: MCPAgent):
 
 
 async def main():
-    parser = argparse.ArgumentParser(description="RSI MCP Agent — LLM + MCP (Groq)")
+    parser = argparse.ArgumentParser(description="MACD MCP Agent — LLM + MCP (Groq)")
     parser.add_argument("--model", default="openai/gpt-oss-20b", help="Groq model")
     args = parser.parse_args()
 
