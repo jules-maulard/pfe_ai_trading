@@ -71,11 +71,7 @@ def main():
     parser.add_argument("--start", type=str, default="2016-01-01")
     parser.add_argument("--end", type=str, default=None)
     parser.add_argument("--interval", type=str, default="1d")
-    parser.add_argument("--out-dir", type=str, default="data/prices")
-    parser.add_argument(
-        "--no-partition", action="store_true",
-        help="Save all symbols in a single CSV instead of one per symbol",
-    )
+    parser.add_argument("--db-path", type=str, default="database/ohlcv.csv")
     args = parser.parse_args()
 
     if args.tickers:
@@ -86,7 +82,7 @@ def main():
     print(f"Fetching {len(symbols)} symbols from {args.start} ...")
 
     retriever = YFinanceRetriever()
-    storage = DuckDbCsvStorage(base_dir=args.out_dir)
+    storage = DuckDbCsvStorage(db_path=args.db_path)
 
     all_dfs = []
     for i in range(0, len(symbols), BATCH_SIZE):
@@ -104,8 +100,7 @@ def main():
         sys.exit(1)
 
     combined = pd.concat(all_dfs, ignore_index=True)
-    partition = not args.no_partition
-    saved = storage.save_prices(combined, partition_by_symbol=partition)
+    saved = storage.save_prices(combined)
 
     summary = combined.groupby("symbol").size()
     print(f"\nSaved {len(combined)} rows for {len(summary)} symbols to {saved}")

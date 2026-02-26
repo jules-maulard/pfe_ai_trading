@@ -20,7 +20,6 @@ class MACDService:
 
     def compute(
         self,
-        data_path: str,
         fast: int = 12,
         slow: int = 26,
         signal: int = 9,
@@ -30,10 +29,9 @@ class MACDService:
         end: Optional[str] = None,
         save: bool = False,
         save_path: str = "data/indicators/macd.csv",
-        partition_by_symbol: bool = False,
         sample_rows: int = 5,
     ) -> Dict[str, Any]:
-        df = self.storage.load_prices(data_path, symbols=symbols, start=start, end=end)
+        df = self.storage.load_prices(symbols=symbols, start=start, end=end)
 
         needed = {"symbol", "date", price_col}
         missing = needed - set(df.columns)
@@ -51,9 +49,7 @@ class MACDService:
 
         saved_to = None
         if save:
-            saved_to = self.storage.save_indicator(
-                result, save_path, partition_by_symbol=partition_by_symbol
-            )
+            saved_to = self.storage.save_indicator(result, save_path)
 
         sample = self._make_sample(result, sample_rows)
 

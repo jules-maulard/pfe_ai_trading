@@ -20,7 +20,6 @@ class RSIService:
 
     def compute(
         self,
-        data_path: str,
         window: int = 14,
         price_col: str = "close",
         symbols: Optional[List[str]] = None,
@@ -28,10 +27,9 @@ class RSIService:
         end: Optional[str] = None,
         save: bool = False,
         save_path: str = "data/indicators/rsi14.csv",
-        partition_by_symbol: bool = False,
         sample_rows: int = 5,
     ) -> Dict[str, Any]:
-        df = self.storage.load_prices(data_path, symbols=symbols, start=start, end=end)
+        df = self.storage.load_prices(symbols=symbols, start=start, end=end)
 
         needed = {"symbol", "date", price_col}
         missing = needed - set(df.columns)
@@ -50,9 +48,7 @@ class RSIService:
 
         saved_to = None
         if save:
-            saved_to = self.storage.save_indicator(
-                result, save_path, partition_by_symbol=partition_by_symbol
-            )
+            saved_to = self.storage.save_indicator(result, save_path)
 
         sample = self._make_sample(result, sample_rows)
 

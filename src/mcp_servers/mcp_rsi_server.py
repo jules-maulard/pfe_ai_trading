@@ -28,7 +28,6 @@ def health_check() -> Dict[str, Any]:
     description="Compute Wilder's RSI for symbols from local OHLCV data.",
 )
 def compute_rsi(
-    data_path: str,
     window: int = 14,
     price_col: str = "close",
     symbols: Optional[List[str]] = None,
@@ -36,14 +35,12 @@ def compute_rsi(
     end: Optional[str] = None,
     save: bool = False,
     save_path: str = "data/indicators/rsi14.csv",
-    partition_by_symbol: bool = False,
     sample_rows: int = 5,
 ) -> Dict[str, Any]:
     return rsi_service.compute(
-        data_path=data_path, window=window, price_col=price_col,
+        window=window, price_col=price_col,
         symbols=symbols, start=start, end=end,
-        save=save, save_path=save_path,
-        partition_by_symbol=partition_by_symbol, sample_rows=sample_rows,
+        save=save, save_path=save_path, sample_rows=sample_rows,
     )
 
 
@@ -52,7 +49,6 @@ def compute_rsi(
     description="Compute MACD for symbols from local OHLCV data.",
 )
 def compute_macd_tool(
-    data_path: str,
     fast: int = 12,
     slow: int = 26,
     signal: int = 9,
@@ -62,25 +58,23 @@ def compute_macd_tool(
     end: Optional[str] = None,
     save: bool = False,
     save_path: str = "data/indicators/macd.csv",
-    partition_by_symbol: bool = False,
     sample_rows: int = 5,
 ) -> Dict[str, Any]:
     return macd_service.compute(
-        data_path=data_path, fast=fast, slow=slow, signal=signal,
+        fast=fast, slow=slow, signal=signal,
         price_col=price_col, symbols=symbols, start=start, end=end,
-        save=save, save_path=save_path,
-        partition_by_symbol=partition_by_symbol, sample_rows=sample_rows,
+        save=save, save_path=save_path, sample_rows=sample_rows,
     )
 
 
 @mcp.prompt(name="compute_rsi_prompt", description="Prompt for computing RSI.")
 def compute_rsi_prompt(symbol: str) -> str:
-    return f"Compute the RSI for {symbol} using the compute_rsi tool with data_path='data/prices'."
+    return f"Compute the RSI for {symbol} using the compute_rsi tool."
 
 
 @mcp.tool(name="compute_rsi_sampling_test", description="Test sampling with RSI.")
-async def compute_rsi_sampling_test(symbol: str, data_path: str, ctx: Context) -> str:
-    rsi = compute_rsi(data_path, symbols=[symbol], sample_rows=1)["sample"][0]["rsi14"]
+async def compute_rsi_sampling_test(symbol: str, ctx: Context) -> str:
+    rsi = compute_rsi(symbols=[symbol], sample_rows=1)["sample"][0]["rsi14"]
     result = await ctx.sample(f"Interpret this RSI result: {rsi}")
     return result.text
 

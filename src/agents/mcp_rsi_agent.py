@@ -23,7 +23,7 @@ Tu as acces a un serveur MCP qui expose des outils pour calculer des indicateurs
 sur des donnees OHLCV locales (CSV) produites par un ingesteur yfinance.
 
 Donnees disponibles :
-- Repertoire des prix : data/prices
+- Base de donnees : database/ohlcv.csv
 - Symboles disponibles : CAC 40 complet (AIR.PA, DG.PA, SU.PA, MC.PA, etc.)
 - Colonnes : symbol, date, open, high, low, close, volume
 
