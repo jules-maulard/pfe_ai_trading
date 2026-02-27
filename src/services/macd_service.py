@@ -81,6 +81,177 @@ class MACDService:
             parts.append(g)
         return pd.concat(parts, ignore_index=True)
 
+    def detect_crossovers(
+        self,
+        fast: int = 12,
+        slow: int = 26,
+        signal: int = 9,
+        price_col: str = "close",
+        symbols: Optional[List[str]] = None,
+        start: Optional[str] = None,
+        end: Optional[str] = None,
+        sample_rows: int = 10,
+    ) -> Dict[str, Any]:
+        """Detect MACD / signal-line and MACD / zero-line crossovers."""
+        df = self.storage.load_prices(symbols=symbols, start=start, end=end)
+        macd_df = self.compute_macd(df, price_col=price_col, fast=fast, slow=slow, signal=signal)
+        macd_df = (
+            macd_df.dropna(subset=["macd", "macd_signal", "macd_hist"])
+            .sort_values(["symbol", "date"])
+            .reset_index(drop=True)
+        )
+
+        events: list[dict] = []
+
+        for symbol, g in macd_df.groupby("symbol"):
+            g = g.reset_index(drop=True)
+            macd_vals = g["macd"].values
+            hist_vals = g["macd_hist"].values
+            dates = g["date"].values
+            n = len(g)
+
+            for i in range(1, n):
+                # Signal-line crossover (histogram sign change)
+                if hist_vals[i - 1] <= 0 < hist_vals[i]:
+                    events.append({
+                        "symbol": symbol,
+                        "date": str(dates[i]),
+                        "type": "bullish_signal_crossover",
+                        "macd": round(float(macd_vals[i]), 6),
+                        "macd_signal": round(float(macd_vals[i] - hist_vals[i] + hist_vals[i]), 6),
+                        "macd_hist": round(float(hist_vals[i]), 6),
+                    })
+                elif hist_vals[i - 1] >= 0 > hist_vals[i]:
+                    events.append({
+                        "symbol": symbol,
+                        "date": str(dates[i]),
+                        "type": "bearish_signal_crossover",
+                        "macd": round(float(macd_vals[i]), 6),
+                        "macd_signal": round(float(macd_vals[i] - hist_vals[i]), 6),
+                        "macd_hist": round(float(hist_vals[i]), 6),
+                    })
+
+                # Zero-line crossover
+                if macd_vals[i - 1] <= 0 < macd_vals[i]:
+                    events.append({
+                        "symbol": symbol,
+                        "date": str(dates[i]),
+                        "type": "bullish_zero_crossover",
+                        "macd": round(float(macd_vals[i]), 6),
+                    })
+                elif macd_vals[i - 1] >= 0 > macd_vals[i]:
+                    events.append({
+                        "symbol": symbol,
+                        "date": str(dates[i]),
+                        "type": "bearish_zero_crossover",
+                        "macd": round(float(macd_vals[i]), 6),
+                    })
+
+        sample = events[-sample_rows:] if sample_rows > 0 else []
+        return {
+            "status": "ok",
+            "total_crossovers": len(events),
+            "sample": sample,
+        }
+
+    def find_divergences(
+        self,
+        fast: int = 12,
+        slow: int = 26,
+        signal: int = 9,
+        price_col: str = "close",
+        pivot_lookback: int = 5,
+        symbols: Optional[List[str]] = None,
+        start: Optional[str] = None,
+        end: Optional[str] = None,
+        sample_rows: int = 10,
+    ) -> Dict[str, Any]:
+        """Detect regular and hidden divergences between price and MACD."""
+        df = self.storage.load_prices(symbols=symbols, start=start, end=end)
+        macd_df = self.compute_macd(df, price_col=price_col, fast=fast, slow=slow, signal=signal)
+        macd_df = (
+            macd_df.dropna(subset=["macd"])
+            .sort_values(["symbol", "date"])
+            .reset_index(drop=True)
+        )
+
+        divergences: list[dict] = []
+
+        for symbol, g in macd_df.groupby("symbol"):
+            g = g.reset_index(drop=True)
+            prices = g[price_col].values
+            macds = g["macd"].values
+            dates = g["date"].values
+
+            highs = self._find_pivots(prices, pivot_lookback, kind="high")
+            lows = self._find_pivots(prices, pivot_lookback, kind="low")
+
+            # Regular bearish: price higher high, MACD lower high
+            for j in range(1, len(highs)):
+                i0, i1 = highs[j - 1], highs[j]
+                if prices[i1] > prices[i0] and macds[i1] < macds[i0]:
+                    divergences.append(self._div_record(
+                        symbol, dates, prices, macds, i0, i1, "regular_bearish",
+                    ))
+
+            # Regular bullish: price lower low, MACD higher low
+            for j in range(1, len(lows)):
+                i0, i1 = lows[j - 1], lows[j]
+                if prices[i1] < prices[i0] and macds[i1] > macds[i0]:
+                    divergences.append(self._div_record(
+                        symbol, dates, prices, macds, i0, i1, "regular_bullish",
+                    ))
+
+            # Hidden bearish: price lower high, MACD higher high
+            for j in range(1, len(highs)):
+                i0, i1 = highs[j - 1], highs[j]
+                if prices[i1] < prices[i0] and macds[i1] > macds[i0]:
+                    divergences.append(self._div_record(
+                        symbol, dates, prices, macds, i0, i1, "hidden_bearish",
+                    ))
+
+            # Hidden bullish: price higher low, MACD lower low
+            for j in range(1, len(lows)):
+                i0, i1 = lows[j - 1], lows[j]
+                if prices[i1] > prices[i0] and macds[i1] < macds[i0]:
+                    divergences.append(self._div_record(
+                        symbol, dates, prices, macds, i0, i1, "hidden_bullish",
+                    ))
+
+        sample = divergences[-sample_rows:] if sample_rows > 0 else []
+        return {
+            "status": "ok",
+            "total_divergences": len(divergences),
+            "sample": sample,
+        }
+
+    @staticmethod
+    def _find_pivots(series, lookback: int, kind: str = "high") -> List[int]:
+        import numpy as np
+        arr = np.asarray(series, dtype=float)
+        n = len(arr)
+        pivots: list[int] = []
+        for i in range(lookback, n - lookback):
+            window = arr[i - lookback : i + lookback + 1]
+            if kind == "high" and arr[i] == window.max():
+                pivots.append(i)
+            elif kind == "low" and arr[i] == window.min():
+                pivots.append(i)
+        return pivots
+
+    @staticmethod
+    def _div_record(symbol, dates, prices, macds, i0, i1, div_type) -> dict:
+        return {
+            "symbol": symbol,
+            "type": div_type,
+            "date_a": str(dates[i0]),
+            "price_a": round(float(prices[i0]), 4),
+            "macd_a": round(float(macds[i0]), 6),
+            "date_b": str(dates[i1]),
+            "price_b": round(float(prices[i1]), 4),
+            "macd_b": round(float(macds[i1]), 6),
+        }
+
     @staticmethod
     def _make_sample(df: pd.DataFrame, n: int) -> list:
         if n <= 0 or df.empty:

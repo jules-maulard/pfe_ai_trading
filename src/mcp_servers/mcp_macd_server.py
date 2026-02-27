@@ -15,6 +15,8 @@ from services.macd_service import MACDService
 mcp = FastMCP("MACD Tools")
 macd_service = MACDService()
 
+_MACD_RESOURCES_DIR = Path(__file__).resolve().parent.parent.parent / "database" / "ressources" / "macd"
+
 
 @mcp.tool(name="health_check", description="Check server health.")
 def health_check() -> Dict[str, Any]:
@@ -42,6 +44,85 @@ def compute_macd_tool(
     )
 
 
+@mcp.tool(
+    name="detect_crossovers",
+    description=(
+        "Detect recent MACD/signal-line and MACD/zero-line crossovers. "
+        "Returns bullish and bearish crossover events with dates and values."
+    ),
+)
+def detect_crossovers_tool(
+    fast: int = 12,
+    slow: int = 26,
+    signal: int = 9,
+    price_col: str = "close",
+    symbols: Optional[List[str]] = None,
+    start: Optional[str] = None,
+    end: Optional[str] = None,
+    sample_rows: int = 10,
+) -> Dict[str, Any]:
+    return macd_service.detect_crossovers(
+        fast=fast, slow=slow, signal=signal,
+        price_col=price_col, symbols=symbols, start=start, end=end,
+        sample_rows=sample_rows,
+    )
+
+
+@mcp.tool(
+    name="find_divergences",
+    description=(
+        "Detect regular and hidden divergences between price and MACD. "
+        "The 'symbols' parameter is REQUIRED — always pass a list like "
+        "['AIR.PA'] to avoid scanning the entire dataset."
+    ),
+)
+def find_divergences_tool(
+    fast: int = 12,
+    slow: int = 26,
+    signal: int = 9,
+    price_col: str = "close",
+    pivot_lookback: int = 5,
+    symbols: Optional[List[str]] = None,
+    start: Optional[str] = None,
+    end: Optional[str] = None,
+    sample_rows: int = 10,
+) -> Dict[str, Any]:
+    return macd_service.find_divergences(
+        fast=fast, slow=slow, signal=signal,
+        price_col=price_col, pivot_lookback=pivot_lookback,
+        symbols=symbols, start=start, end=end,
+        sample_rows=sample_rows,
+    )
+
+
+# ──────────────────────────────────────────────
+# RESOURCES
+# ──────────────────────────────────────────────
+
+@mcp.resource(
+    "macd://knowledge/calculation-theory",
+    description="MACD calculation theory, formulas and parameter tuning.",
+)
+def macd_calculation_theory() -> str:
+    return (_MACD_RESOURCES_DIR / "macd_calculation_theory.md").read_text(encoding="utf-8")
+
+
+@mcp.resource(
+    "macd://knowledge/crossovers-guide",
+    description="Guide to MACD signal-line and zero-line crossovers.",
+)
+def macd_crossovers_guide() -> str:
+    return (_MACD_RESOURCES_DIR / "macd_crossovers_guide.md").read_text(encoding="utf-8")
+
+
+@mcp.resource(
+    "macd://knowledge/divergences-guide",
+    description="Guide to MACD divergences (regular and hidden).",
+)
+def macd_divergences_guide() -> str:
+    return (_MACD_RESOURCES_DIR / "macd_divergences_guide.md").read_text(encoding="utf-8")
+
+
 # ──────────────────────────────────────────────
 # PROMPTS
 # ──────────────────────────────────────────────
@@ -53,17 +134,11 @@ def compute_macd_tool(
 def full_macd_analysis_prompt(symbol: str) -> str:
     return (
         f"Perform a comprehensive MACD analysis for {symbol}. Follow these steps:\n"
-        "1. Call `compute_macd` for the symbol with a high sample_rows (e.g. 20) to see recent history.\n"
-        "2. Examine the MACD line vs signal line:\n"
-        "   - Is MACD above or below the signal? → Current momentum direction.\n"
-        "   - Did a crossover happen recently? → Potential trend change.\n"
-        "3. Analyse the histogram:\n"
-        "   - Is it positive and growing? → Bullish momentum strengthening.\n"
-        "   - Is it negative and shrinking? → Bearish momentum weakening.\n"
-        "4. Check the zero-line:\n"
-        "   - MACD above 0 → Bullish regime; below 0 → Bearish regime.\n"
-        "5. Look for divergences between price trend and MACD direction.\n"
-        "6. Provide a structured report with: summary, data table, interpretation, recommendation."
+        f"1. Call compute_macd with symbols=['{symbol}'] and sample_rows=20.\n"
+        f"2. Call detect_crossovers with symbols=['{symbol}'].\n"
+        f"3. Call find_divergences with symbols=['{symbol}'].\n"
+        "4. Read relevant knowledge resources to ground your interpretation.\n"
+        "5. Synthesise a structured report: summary, key data, interpretation, recommendation."
     )
 
 
@@ -73,13 +148,25 @@ def full_macd_analysis_prompt(symbol: str) -> str:
 )
 def crossover_check_prompt(symbol: str) -> str:
     return (
-        f"Check for recent MACD crossovers on {symbol}.\n"
-        "1. Call `compute_macd` for the symbol with sample_rows=15.\n"
-        "2. Scan the returned data for sign changes in the histogram (macd_hist):\n"
-        "   - Positive → negative = bearish crossover (MACD crosses below signal).\n"
-        "   - Negative → positive = bullish crossover (MACD crosses above signal).\n"
-        "3. Report the most recent crossover: date, type, and MACD values at that point.\n"
-        "4. State whether the current position is bullish or bearish."
+        f"Detect and analyse recent MACD crossovers for {symbol}.\n"
+        f"1. Call detect_crossovers with symbols=['{symbol}'].\n"
+        "2. Read the resource macd://knowledge/crossovers-guide.\n"
+        "3. For each crossover found, report: date, type, MACD and signal values.\n"
+        "4. State current momentum direction (bullish or bearish) and strength."
+    )
+
+
+@mcp.prompt(
+    name="divergence_scan",
+    description="Detect and interpret MACD divergences for a symbol.",
+)
+def divergence_scan_prompt(symbol: str) -> str:
+    return (
+        f"Detect and analyse MACD divergences for {symbol}.\n"
+        f"1. Call find_divergences with symbols=['{symbol}'].\n"
+        "2. Read the resource macd://knowledge/divergences-guide.\n"
+        "3. For each divergence found, explain type, dates, price/MACD levels, and trend implication.\n"
+        "4. Conclude with the strongest signal and a trading recommendation."
     )
 
 
@@ -90,13 +177,12 @@ def crossover_check_prompt(symbol: str) -> str:
 def macd_momentum_comparison_prompt(symbols: str) -> str:
     return (
         f"Compare the MACD momentum for the following symbols: {symbols}.\n"
-        "1. Call `compute_macd` for each symbol (you can pass them all at once as a list).\n"
-        "2. For each symbol, note:\n"
-        "   - The latest MACD value and signal value\n"
-        "   - The current histogram value and its recent trend (growing/shrinking)\n"
-        "   - Whether MACD is above or below zero\n"
-        "3. Rank the symbols from most bullish to most bearish momentum.\n"
-        "4. Present a comparison table and highlight the strongest opportunities."
+        f"1. Call compute_macd with symbols={symbols}.\n"
+        f"2. Call detect_crossovers with symbols={symbols}.\n"
+        "3. Read the resource macd://knowledge/calculation-theory.\n"
+        "4. For each symbol, note: latest MACD/signal values, histogram trend, zero-line position.\n"
+        "5. Rank symbols from most bullish to most bearish momentum.\n"
+        "6. Present a comparison table and highlight the strongest opportunities."
     )
 
 
