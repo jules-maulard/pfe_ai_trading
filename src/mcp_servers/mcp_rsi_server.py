@@ -15,6 +15,11 @@ from services.rsi_service import RSIService
 mcp = FastMCP("RSI Tools")
 rsi_service = RSIService()
 
+_RSI_RESOURCES_DIR = Path(__file__).resolve().parent.parent.parent / "database" / "ressources" / "rsi"
+
+# ──────────────────────────────────────────────
+# TOOLS
+# ──────────────────────────────────────────────
 
 @mcp.tool(name="health_check", description="Check server health.")
 def health_check() -> Dict[str, Any]:
@@ -69,7 +74,8 @@ def detect_extremes(
     name="find_divergences",
     description=(
         "Detect regular and hidden divergences between price peaks/troughs "
-        "and RSI peaks/troughs. Returns bullish/bearish regular and hidden divergences."
+        "and RSI peaks/troughs. The 'symbols' parameter is REQUIRED — always "
+        "pass a list like ['AIR.PA'] to avoid scanning the entire dataset."
     ),
 )
 def find_divergences(
@@ -92,8 +98,10 @@ def find_divergences(
 @mcp.tool(
     name="analyze_multi_timeframe_rsi",
     description=(
-        "Compare the latest RSI value across different resampled timeframes "
-        "(e.g. 1D, 1W, 1ME) to assess the underlying trend strength."
+        "Compare the latest RSI value across resampled timeframes. "
+        "Valid timeframe codes: '1D' (daily), '1W' (weekly), '1ME' (monthly). "
+        "Do NOT use '1M' — use '1ME' for monthly. "
+        "The 'symbols' parameter is REQUIRED."
     ),
 )
 def analyze_multi_timeframe_rsi(
@@ -138,14 +146,127 @@ def detect_failure_swings(
         sample_rows=sample_rows,
     )
 
+# ──────────────────────────────────────────────
+# RESOURCES
+# ──────────────────────────────────────────────
+
+@mcp.resource(
+    "rsi://knowledge/calculation-theory",
+    description="RSI calculation theory and formulas."
+)
+def rsi_calculation_theory() -> str:
+    return (_RSI_RESOURCES_DIR / "rsi_calculation_theory.md").read_text(encoding="utf-8")
+
+
+@mcp.resource(
+    "rsi://knowledge/divergences-guide",
+    description="Guide to RSI divergences."
+)
+def rsi_divergences_guide() -> str:
+    return (_RSI_RESOURCES_DIR / "rsi_divergences_guide.md").read_text(encoding="utf-8")
+
+
+@mcp.resource(
+    "rsi://knowledge/extremes-and-regimes",
+    description="RSI extremes and regime analysis."
+)
+def rsi_extremes_and_regimes() -> str:
+    return (_RSI_RESOURCES_DIR / "rsi_extremes_and_regimes.md").read_text(encoding="utf-8")
+
+
+@mcp.resource(
+    "rsi://knowledge/failure-swings",
+    description="RSI failure-swing patterns."
+)
+def rsi_failure_swings() -> str:
+    return (_RSI_RESOURCES_DIR / "rsi_failure_swings.md").read_text(encoding="utf-8")
+
+
+@mcp.resource(
+    "rsi://knowledge/multi-timeframe-analysis",
+    description="Multi-timeframe RSI analysis."
+)
+def rsi_multi_timeframe_analysis() -> str:
+    return (_RSI_RESOURCES_DIR / "rsi_multi_timeframe_analysis.md").read_text(encoding="utf-8")
+
+# ──────────────────────────────────────────────
+# PROMPTS
+# ──────────────────────────────────────────────
 
 @mcp.prompt(
-    name="compute_rsi_prompt", 
-    description="Prompt for computing RSI."
+    name="full_rsi_analysis",
+    description="Step-by-step workflow for a comprehensive RSI analysis on a symbol.",
 )
-def compute_rsi_prompt(symbol: str) -> str:
-    return f"Compute the RSI for {symbol} using the compute_rsi tool."
+def full_rsi_analysis_prompt(symbol: str) -> str:
+    return (
+        f"Perform a comprehensive RSI analysis for {symbol}. Follow these steps:\n"
+        f"1. Call compute_rsi with symbols=['{symbol}'].\n"
+        f"2. Call detect_extremes with symbols=['{symbol}'].\n"
+        f"3. Call find_divergences with symbols=['{symbol}'].\n"
+        f"4. Call detect_failure_swings with symbols=['{symbol}'].\n"
+        f"5. Call analyze_multi_timeframe_rsi with symbols=['{symbol}'] and timeframes=['1D','1W','1ME'].\n"
+        "6. Read relevant knowledge resources to ground your interpretation.\n"
+        "7. Synthesise a structured report: summary, key data, interpretation, recommendation."
+    )
 
+
+@mcp.prompt(
+    name="overbought_oversold_scan",
+    description="Workflow to screen symbols for overbought or oversold conditions.",
+)
+def overbought_oversold_scan_prompt(threshold_ob: str = "70", threshold_os: str = "30") -> str:
+    return (
+        f"Screen all available CAC 40 symbols for overbought/oversold conditions "
+        f"using thresholds OB={threshold_ob} / OS={threshold_os}.\n"
+        "1. Call `detect_extremes` with a high sample_rows (e.g. 50) to capture recent events.\n"
+        "2. Read the resource `rsi://knowledge/extremes-and-regimes` to understand regime-adjusted thresholds.\n"
+        "3. Group results by symbol and zone (overbought / oversold).\n"
+        "4. Rank symbols by how extreme their latest RSI reading is.\n"
+        "5. Present a clear table and highlight the most actionable opportunities."
+    )
+
+
+@mcp.prompt(
+    name="divergence_scan",
+    description="Workflow to detect and interpret RSI divergences for a symbol.",
+)
+def divergence_scan_prompt(symbol: str) -> str:
+    return (
+        f"Detect and analyse RSI divergences for {symbol}.\n"
+        f"1. Call find_divergences with symbols=['{symbol}'].\n"
+        "2. Read the resource rsi://knowledge/divergences-guide.\n"
+        "3. For each divergence found, explain type, dates, price/RSI levels, and trend implication.\n"
+        "4. Conclude with the strongest signal and a trading recommendation."
+    )
+
+
+@mcp.prompt(
+    name="failure_swing_detection",
+    description="Workflow to find and interpret RSI failure-swing reversal patterns.",
+)
+def failure_swing_detection_prompt(symbol: str) -> str:
+    return (
+        f"Detect RSI failure-swing patterns for {symbol}.\n"
+        f"1. Call detect_failure_swings with symbols=['{symbol}'].\n"
+        "2. Read the resource rsi://knowledge/failure-swings.\n"
+        "3. For each failure swing, explain type, key RSI levels, and trigger date.\n"
+        "4. Assess whether any recent failure swing is still active or confirmed."
+    )
+
+
+@mcp.prompt(
+    name="multi_timeframe_trend",
+    description="Workflow to assess trend strength via multi-timeframe RSI analysis.",
+)
+def multi_timeframe_trend_prompt(symbol: str) -> str:
+    return (
+        f"Assess trend strength for {symbol} using multi-timeframe RSI.\n"
+        f"1. Call analyze_multi_timeframe_rsi with symbols=['{symbol}'] and timeframes=['1D','1W','1ME'].\n"
+        "2. Read the resource rsi://knowledge/multi-timeframe-analysis.\n"
+        "3. Determine if RSI across timeframes is aligned (all bullish, all bearish, or mixed).\n"
+        "4. Apply top-down rules: monthly RSI > 50 = bullish, weekly confirms/contradicts, daily for timing.\n"
+        "5. Conclude with overall trend assessment and confidence level."
+    )
 
 
 if __name__ == "__main__":

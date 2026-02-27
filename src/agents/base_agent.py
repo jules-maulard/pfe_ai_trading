@@ -45,6 +45,7 @@ class BaseMCPAgent:
         self.mcp_client: Client | None = None
         self.openai_tools: List[Dict[str, Any]] = []
         self.prompts: List[Dict[str, Any]] = []
+        self.resources: list = []
         self.messages: List[Dict[str, Any]] = []
 
     async def connect(self):
@@ -59,6 +60,30 @@ class BaseMCPAgent:
         except Exception:
             self.prompts = []
 
+        try:
+            self.resources = await self.mcp_client.list_resources()
+        except Exception:
+            self.resources = []
+
+        if self.resources:
+            self.openai_tools.append({
+                "type": "function",
+                "function": {
+                    "name": "read_resource",
+                    "description": "Read the content of a knowledge resource by its URI.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "uri": {
+                                "type": "string",
+                                "description": "The resource URI to read.",
+                            }
+                        },
+                        "required": ["uri"],
+                    },
+                },
+            })
+
         self.messages = [{"role": "system", "content": await self._build_system_prompt()}]
 
         tool_names = [t["function"]["name"] for t in self.openai_tools]
@@ -71,18 +96,14 @@ class BaseMCPAgent:
 
     async def _build_system_prompt(self) -> str:
         system_prompt = self.base_system_prompt
-        if self.prompts:
-            system_prompt += "\n\nAvailable MCP prompts:\n"
-            for p in self.prompts:
-                try:
-                    prompt_example = await self.mcp_client.get_prompt(
-                        p.name,
-                        {k: f"<{k}>" for k in (p.inputSchema or {}).get("properties", {})},
-                    )
-                    prompt_text = prompt_example.text if hasattr(prompt_example, "text") else str(prompt_example)
-                except Exception:
-                    prompt_text = p.description or ""
-                system_prompt += f"\n- {p.name}: {prompt_text.strip()}"
+
+        if self.resources:
+            system_prompt += "\n\nAvailable knowledge resources (use the read_resource tool to read one):\n"
+            for r in self.resources:
+                uri = getattr(r, 'uri', '')
+                desc = getattr(r, 'description', '') or ''
+                system_prompt += f"\n- {uri}: {desc}"
+
         return system_prompt
 
     async def _call_mcp_tool(self, name: str, arguments: Dict[str, Any]) -> str:
@@ -106,6 +127,39 @@ class BaseMCPAgent:
             if isinstance(data, (dict, list)):
                 return json.dumps(data, ensure_ascii=False, default=str)
             return str(data)
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
+    async def _read_mcp_resource(self, uri: str) -> str:
+        print(f"  Resource read: {uri}")
+        try:
+            result = await self.mcp_client.read_resource(uri)
+            if isinstance(result, str):
+                return result
+            if hasattr(result, 'content'):
+                for part in result.content:
+                    if hasattr(part, 'text'):
+                        return part.text
+            return str(result)
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
+    async def _use_mcp_prompt(self, prompt_name: str, arguments: Dict[str, Any] | None = None) -> str:
+        print(f"  Prompt invoke: {prompt_name}({json.dumps(arguments or {}, ensure_ascii=False)})")
+        try:
+            result = await self.mcp_client.get_prompt(prompt_name, arguments or {})
+            if hasattr(result, 'messages') and result.messages:
+                parts = []
+                for msg in result.messages:
+                    text = getattr(msg, 'text', None)
+                    if text is None and hasattr(msg, 'content'):
+                        text = msg.content if isinstance(msg.content, str) else str(msg.content)
+                    if text:
+                        parts.append(text)
+                return "\n".join(parts) if parts else str(result)
+            if hasattr(result, 'text'):
+                return result.text
+            return str(result)
         except Exception as e:
             return json.dumps({"error": str(e)})
 
@@ -137,7 +191,10 @@ class BaseMCPAgent:
                 except json.JSONDecodeError:
                     fn_args = {}
 
-                tool_result = await self._call_mcp_tool(fn_name, fn_args)
+                if fn_name == "read_resource":
+                    tool_result = await self._read_mcp_resource(fn_args.get("uri", ""))
+                else:
+                    tool_result = await self._call_mcp_tool(fn_name, fn_args)
                 self.messages.append(_filter({
                     "role": "tool",
                     "tool_call_id": tool_call.id,
@@ -154,9 +211,12 @@ async def interactive_loop(agent: BaseMCPAgent, agent_name: str):
     print(f"  {agent_name} — Technical Analysis Assistant")
     print("=" * 60)
     print("Commands:")
-    print("  /reset   — Reset conversation")
-    print("  /tools   — List available tools")
-    print("  /quit    — Quit")
+    print("  /reset      — Reset conversation")
+    print("  /tools      — List available tools")
+    print("  /resources  — List available resources")
+    print("  /prompts    — List available prompt workflows")
+    print("  /prompt <name> [args] — Run a prompt workflow")
+    print("  /quit       — Quit")
     print("=" * 60 + "\n")
 
     while True:
@@ -179,6 +239,56 @@ async def interactive_loop(agent: BaseMCPAgent, agent_name: str):
             for t in agent.openai_tools:
                 fn = t["function"]
                 print(f"  - {fn['name']} — {fn['description'][:80]}")
+            continue
+        if user_input.lower() == "/resources":
+            if not agent.resources:
+                print("  No resources available.")
+            else:
+                for r in agent.resources:
+                    desc = getattr(r, 'description', '') or ''
+                    name = getattr(r, 'name', str(r))
+                    uri = getattr(r, 'uri', '')
+                    print(f"  - {name} ({uri})" + (f" — {desc[:80]}" if desc else ""))
+            continue
+        if user_input.lower() == "/prompts":
+            if not agent.prompts:
+                print("  No prompts available.")
+            else:
+                for p in agent.prompts:
+                    desc = p.description or ""
+                    arg_names = [a.name for a in (p.arguments or [])]
+                    params = f" <{'>  <'.join(arg_names)}>" if arg_names else ""
+                    print(f"  - /prompt {p.name}{params}")
+                    if desc:
+                        print(f"    {desc[:100]}")
+            continue
+        if user_input.lower().startswith("/prompt "):
+            parts = user_input.split(None, 2)  # /prompt name arg1=val1 arg2=val2 ...
+            if len(parts) < 2:
+                print("  Usage: /prompt <name> [key=value ...]")
+                continue
+            prompt_name = parts[1]
+            # Parse key=value arguments
+            prompt_args: Dict[str, str] = {}
+            if len(parts) == 3:
+                for kv in parts[2].split():
+                    if "=" in kv:
+                        k, v = kv.split("=", 1)
+                        prompt_args[k] = v
+                    else:
+                        # Single positional arg → try to match first expected parameter
+                        matched = agent.prompts
+                        target = [p for p in matched if p.name == prompt_name]
+                        if target and target[0].arguments:
+                            first_arg = target[0].arguments[0].name
+                            prompt_args[first_arg] = kv
+            try:
+                prompt_text = await agent._use_mcp_prompt(prompt_name, prompt_args)
+                print(f"  Prompt loaded → sending to agent...\n")
+                response = await agent.chat(prompt_text)
+                print(f"\nAgent > {response}\n")
+            except Exception as e:
+                print(f"\nError: {e}\n")
             continue
 
         try:
