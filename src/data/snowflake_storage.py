@@ -19,7 +19,7 @@ from dotenv import load_dotenv
 
 # Load .env first, then .env.snowflake (overrides if both exist)
 load_dotenv()
-load_dotenv(".env.snowflake", override=True)
+# load_dotenv(".env", override=True)
 
 try:
     import snowflake.connector
@@ -66,7 +66,6 @@ class SnowflakeStorage:
                 "Set them in your .env file or pass them as arguments."
             )
 
-    # ── connection helper ────────────────────────────────────────────
     def _connect(self):
         return snowflake.connector.connect(
             account=self.account,
@@ -76,8 +75,13 @@ class SnowflakeStorage:
             schema=self.schema,
             warehouse=self.warehouse,
         )
+    
+    def reset_table(self):
+        with self._connect() as conn:
+            cur = conn.cursor()
+            cur.execute(f"DROP TABLE IF EXISTS {OHLCV_TABLE}")
+        print(f"Snowflake: table {OHLCV_TABLE} has been reset (dropped if existed).")
 
-    # ── DDL : create database, schema & table if needed ─────────────
     def ensure_table(self):
         with self._connect() as conn:
             cur = conn.cursor()
@@ -93,11 +97,11 @@ class SnowflakeStorage:
                     high     FLOAT,
                     low      FLOAT,
                     close    FLOAT,
-                    volume   BIGINT
+                    volume   BIGINT,
+                    CONSTRAINT pk_ohlcv PRIMARY KEY (symbol, date)
                 )
             """)
 
-    # ── Write ────────────────────────────────────────────────────────
     def save_prices(self, df: pd.DataFrame) -> str:
         """Upload a DataFrame to the OHLCV table (append)."""
         self.ensure_table()
@@ -110,14 +114,17 @@ class SnowflakeStorage:
         if "DATE" in upload.columns:
             upload["DATE"] = pd.to_datetime(upload["DATE"]).dt.strftime("%Y-%m-%d")
 
-        with self._connect() as conn:
-            success, _nchunks, nrows, _output = write_pandas(
-                conn, upload, OHLCV_TABLE
-            )
-        return f"Snowflake: inserted {nrows} rows into {OHLCV_TABLE}"
+        try:
+            with self._connect() as conn:
+                success, _nchunks, nrows, _output = write_pandas(
+                    conn, upload, OHLCV_TABLE
+                )
+            return f"Snowflake: inserted {nrows} rows into {OHLCV_TABLE}"
+        except Exception as e:
+            print(f"Erreur lors de l'insertion dans Snowflake: {e}")
+            raise
 
-    # ── Read ─────────────────────────────────────────────────────────
-    def load_prices(
+    def query_prices(
         self,
         symbols: Optional[List[str]] = None,
         start: Optional[str] = None,
@@ -143,7 +150,6 @@ class SnowflakeStorage:
         df.columns = [c.lower() for c in df.columns]
         return df
 
-    # ── Generic query ────────────────────────────────────────────────
     def query(self, sql: str) -> pd.DataFrame:
         with self._connect() as conn:
             cur = conn.cursor().execute(sql)

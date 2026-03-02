@@ -45,10 +45,10 @@ def main():
 
     # ── 3. Read back ─────────────────────────────────────────────────
     print("Reading back …")
-    df = sf.load_prices(symbols=["TEST.PA"])
+    df = sf.query_prices(symbols=["TEST.PA"])
     print(df.to_string(index=False))
 
-    # ── 4. Cleanup test data ─────────────────────────────────────────
+    # # ── 4. Cleanup test data ─────────────────────────────────────────
     print("Cleaning up test rows …")
     sf.query("DELETE FROM OHLCV WHERE SYMBOL = 'TEST.PA'")
     print("  Done. Test passed!")
