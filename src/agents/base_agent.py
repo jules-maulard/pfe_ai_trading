@@ -229,7 +229,8 @@ async def interactive_loop(agent: BaseMCPAgent, agent_name: str):
         if not user_input:
             continue
 
-        if user_input.lower() == "/quit":
+        quit_commands = {"/quit", "/exit", "/stop", "/q"}
+        if user_input.lower() in quit_commands:
             print("Goodbye!")
             break
         if user_input.lower() == "/reset":
