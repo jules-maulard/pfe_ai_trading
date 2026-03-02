@@ -34,15 +34,21 @@ class SnowflakeStorage(BaseStorage):
                 "Install it with: pip install snowflake-connector-python"
             ) from exc
 
+        try:
+            from dotenv import load_dotenv
+            load_dotenv()
+        except ImportError:
+            pass
+
         self._sf = snowflake.connector
         self._write_pandas = write_pandas
 
         self.account = account or os.environ["SNOWFLAKE_ACCOUNT"]
         self.user = user or os.environ["SNOWFLAKE_USER"]
         self.password = password or os.environ["SNOWFLAKE_PASSWORD"]
-        self.warehouse = warehouse or os.environ.get("SNOWFLAKE_WAREHOUSE", "COMPUTE_WH")
-        self.database = database or os.environ.get("SNOWFLAKE_DATABASE", "TRADING")
+        self.database = database or os.environ.get("SNOWFLAKE_DATABASE", "PFE_TRADING")
         self.schema = schema or os.environ.get("SNOWFLAKE_SCHEMA", "PUBLIC")
+        self.warehouse = warehouse or os.environ.get("SNOWFLAKE_WAREHOUSE", "COMPUTE_WH")
 
     def _connect(self):
         return self._sf.connect(
@@ -57,6 +63,9 @@ class SnowflakeStorage(BaseStorage):
     def _write(self, df: pd.DataFrame, table: str) -> str:
         conn = self._connect()
         try:
+            if "date" in df.columns:
+                df["date"] = pd.to_datetime(df["date"]).dt.date
+            df.columns = [c.upper() for c in df.columns]
             self._write_pandas(conn, df, table.upper(), auto_create_table=True, overwrite=False)
         finally:
             conn.close()

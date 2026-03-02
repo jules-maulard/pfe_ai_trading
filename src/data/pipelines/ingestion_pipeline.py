@@ -42,10 +42,12 @@ def run_ingestion(
     mode: str = "auto",
 ) -> pd.DataFrame:
     retriever = YFinanceRetriever()
-    today = datetime.utcnow().strftime("%Y-%m-%d")
+    from datetime import timezone
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
     if mode == "auto":
-        all_dfs: list[pd.DataFrame] = []
+        all_ohlcv: list[pd.DataFrame] = []
+        all_dividends: list[pd.DataFrame] = []
         for symbol in symbols:
             last_date_str = storage.get_last_date("ohlcv", symbol)
             if last_date_str:
@@ -59,16 +61,29 @@ def run_ingestion(
             print(f"  {symbol}: fetching from {sym_start} to {sym_end}")
             df = retriever.get_ohlcv([symbol], start=sym_start, end=sym_end, interval=interval)
             if not df.empty:
-                all_dfs.append(df)
-        if not all_dfs:
+                all_ohlcv.append(df)
+            div_df = retriever.get_dividends(symbol)
+            if not div_df.empty:
+                all_dividends.append(div_df)
+        if not all_ohlcv:
             print("No new data to ingest.")
             return pd.DataFrame()
-        combined = pd.concat(all_dfs, ignore_index=True)
+        combined = pd.concat(all_ohlcv, ignore_index=True)
+        if all_dividends:
+            combined_div = pd.concat(all_dividends, ignore_index=True)
+        else:
+            combined_div = pd.DataFrame(columns=["symbol", "date", "amount"])
     else:
         effective_start = start or "2016-01-01"
         effective_end = end or today
         print(f"  Manual mode: fetching {len(symbols)} symbols from {effective_start} to {effective_end}")
         combined = retriever.get_ohlcv(symbols, start=effective_start, end=effective_end, interval=interval)
+        all_dividends = [retriever.get_dividends(symbol) for symbol in symbols]
+        all_dividends = [df for df in all_dividends if not df.empty]
+        if all_dividends:
+            combined_div = pd.concat(all_dividends, ignore_index=True)
+        else:
+            combined_div = pd.DataFrame(columns=["symbol", "date", "amount"])
 
     if combined.empty:
         print("No data fetched.")
@@ -81,14 +96,21 @@ def run_ingestion(
 
     if not existing.empty:
         merged = pd.concat([existing, combined], ignore_index=True)
-        merged["date"] = pd.to_datetime(merged["date"])
+        merged["date"] = pd.to_datetime(merged["date"], utc=True)
         merged = merged.drop_duplicates(subset=["symbol", "date"], keep="last")
     else:
         merged = combined
 
     saved = storage.save_ohlcv(merged)
+    if "symbol" not in merged.columns and "SYMBOL" in merged.columns:
+        merged["symbol"] = merged["SYMBOL"]
     summary = merged.groupby("symbol").size()
     print(f"\nSaved {len(merged)} total rows for {len(summary)} symbols to {saved}")
+
+    if not combined_div.empty:
+        saved_div = storage.save_dividend(combined_div)
+        print(f"Saved {len(combined_div)} dividend rows to {saved_div}")
+
     return merged
 
 
