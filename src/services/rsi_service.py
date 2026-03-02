@@ -10,12 +10,13 @@ if _SRC not in sys.path:
 import pandas as pd
 from typing import Any, Dict, List, Optional
 
-from data.duckdb_csv_storage import DuckDbCsvStorage
+from data.storage.base_storage import BaseStorage
+from data.storage.csv_storage import CsvStorage
 
 
 class RSIService:
-    def __init__(self, storage: DuckDbCsvStorage = None):
-        self.storage = storage or DuckDbCsvStorage()
+    def __init__(self, storage: BaseStorage = None):
+        self.storage = storage or CsvStorage()
 
     def compute(
         self,
@@ -26,7 +27,7 @@ class RSIService:
         end: Optional[str] = None,
         sample_rows: int = 5,
     ) -> Dict[str, Any]:
-        df = self.storage.load_prices(symbols=symbols, start=start, end=end)
+        df = self.storage.load_ohlcv(symbols=symbols, start=start, end=end)
 
         needed = {"symbol", "date", price_col}
         missing = needed - set(df.columns)
@@ -94,7 +95,7 @@ class RSIService:
         sample_rows: int = 10,
     ) -> Dict[str, Any]:
         """Identify periods where the RSI crosses overbought / oversold thresholds."""
-        df = self.storage.load_prices(symbols=symbols, start=start, end=end)
+        df = self.storage.load_ohlcv(symbols=symbols, start=start, end=end)
         rsi_df = self.compute_rsi_wilder(df, price_col=price_col, window=window)
         rsi_col = f"rsi{window}"
 
@@ -146,7 +147,7 @@ class RSIService:
         sample_rows: int = 10,
     ) -> Dict[str, Any]:
         """Detect regular and hidden divergences between price and RSI."""
-        df = self.storage.load_prices(symbols=symbols, start=start, end=end)
+        df = self.storage.load_ohlcv(symbols=symbols, start=start, end=end)
         rsi_df = self.compute_rsi_wilder(df, price_col=price_col, window=window)
         rsi_col = f"rsi{window}"
         rsi_df = rsi_df.dropna(subset=[rsi_col]).sort_values(["symbol", "date"]).reset_index(drop=True)
@@ -223,7 +224,7 @@ class RSIService:
         if timeframes is None:
             timeframes = ["1D", "1W", "1ME"]
 
-        df = self.storage.load_prices(symbols=symbols, start=start, end=end)
+        df = self.storage.load_ohlcv(symbols=symbols, start=start, end=end)
         needed = {"symbol", "date", price_col}
         missing = needed - set(df.columns)
         if missing:
@@ -290,7 +291,7 @@ class RSIService:
         *Bearish failure swing*: RSI rises above overbought, drops, rises again
         (stays below overbought), then breaks the drop low.
         """
-        df = self.storage.load_prices(symbols=symbols, start=start, end=end)
+        df = self.storage.load_ohlcv(symbols=symbols, start=start, end=end)
         rsi_df = self.compute_rsi_wilder(df, price_col=price_col, window=window)
         rsi_col = f"rsi{window}"
         rsi_df = rsi_df.dropna(subset=[rsi_col]).sort_values(["symbol", "date"]).reset_index(drop=True)

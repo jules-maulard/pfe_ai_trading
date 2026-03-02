@@ -10,12 +10,13 @@ if _SRC not in sys.path:
 import pandas as pd
 from typing import Any, Dict, List, Optional
 
-from data.duckdb_csv_storage import DuckDbCsvStorage
+from data.storage.base_storage import BaseStorage
+from data.storage.csv_storage import CsvStorage
 
 
 class MACDService:
-    def __init__(self, storage: DuckDbCsvStorage = None):
-        self.storage = storage or DuckDbCsvStorage()
+    def __init__(self, storage: BaseStorage = None):
+        self.storage = storage or CsvStorage()
 
     def compute(
         self,
@@ -28,7 +29,7 @@ class MACDService:
         end: Optional[str] = None,
         sample_rows: int = 5,
     ) -> Dict[str, Any]:
-        df = self.storage.load_prices(symbols=symbols, start=start, end=end)
+        df = self.storage.load_ohlcv(symbols=symbols, start=start, end=end)
 
         needed = {"symbol", "date", price_col}
         missing = needed - set(df.columns)
@@ -93,7 +94,7 @@ class MACDService:
         sample_rows: int = 10,
     ) -> Dict[str, Any]:
         """Detect MACD / signal-line and MACD / zero-line crossovers."""
-        df = self.storage.load_prices(symbols=symbols, start=start, end=end)
+        df = self.storage.load_ohlcv(symbols=symbols, start=start, end=end)
         macd_df = self.compute_macd(df, price_col=price_col, fast=fast, slow=slow, signal=signal)
         macd_df = (
             macd_df.dropna(subset=["macd", "macd_signal", "macd_hist"])
@@ -167,7 +168,7 @@ class MACDService:
         sample_rows: int = 10,
     ) -> Dict[str, Any]:
         """Detect regular and hidden divergences between price and MACD."""
-        df = self.storage.load_prices(symbols=symbols, start=start, end=end)
+        df = self.storage.load_ohlcv(symbols=symbols, start=start, end=end)
         macd_df = self.compute_macd(df, price_col=price_col, fast=fast, slow=slow, signal=signal)
         macd_df = (
             macd_df.dropna(subset=["macd"])

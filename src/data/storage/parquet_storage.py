@@ -1,0 +1,119 @@
+from __future__ import annotations
+
+from pathlib import Path
+from typing import List, Optional
+
+import duckdb
+import pandas as pd
+
+from data.storage.base_storage import BaseStorage
+
+DEFAULT_BASE_DIR = "database/parquet"
+
+
+class ParquetStorage(BaseStorage):
+
+    def __init__(self, base_dir: str = DEFAULT_BASE_DIR):
+        self.base_dir = Path(base_dir)
+        self.base_dir.mkdir(parents=True, exist_ok=True)
+
+    def _path(self, table: str) -> Path:
+        return self.base_dir / f"{table}.parquet"
+
+    def _save(self, df: pd.DataFrame, table: str, sort_cols: List[str]) -> str:
+        path = self._path(table)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        df.sort_values(sort_cols).to_parquet(path, index=False, engine="pyarrow")
+        return str(path)
+
+    def _load(
+        self,
+        table: str,
+        symbols: Optional[List[str]] = None,
+        start: Optional[str] = None,
+        end: Optional[str] = None,
+    ) -> pd.DataFrame:
+        path = self._path(table)
+        if not path.exists():
+            raise FileNotFoundError(f"Data file not found: {path}")
+
+        source = f"'{path.as_posix()}'"
+        sql = f"SELECT * FROM read_parquet({source})"
+
+        conditions = []
+        if symbols:
+            syms = ", ".join(f"'{s}'" for s in symbols)
+            conditions.append(f"symbol IN ({syms})")
+        if start:
+            conditions.append(f"date >= '{start}'")
+        if end:
+            conditions.append(f"date <= '{end}'")
+        if conditions:
+            sql += " WHERE " + " AND ".join(conditions)
+
+        return duckdb.sql(sql).df()
+
+    def save_ohlcv(self, df: pd.DataFrame) -> str:
+        return self._save(df, "ohlcv", ["symbol", "date"])
+
+    def load_ohlcv(
+        self,
+        symbols: Optional[List[str]] = None,
+        start: Optional[str] = None,
+        end: Optional[str] = None,
+    ) -> pd.DataFrame:
+        return self._load("ohlcv", symbols=symbols, start=start, end=end)
+
+    def save_asset(self, df: pd.DataFrame) -> str:
+        return self._save(df, "asset", ["symbol"])
+
+    def load_asset(self, symbols: Optional[List[str]] = None) -> pd.DataFrame:
+        return self._load("asset", symbols=symbols)
+
+    def save_income_statement(self, df: pd.DataFrame) -> str:
+        return self._save(df, "income_statement", ["symbol", "date"])
+
+    def load_income_statement(
+        self,
+        symbols: Optional[List[str]] = None,
+        start: Optional[str] = None,
+        end: Optional[str] = None,
+    ) -> pd.DataFrame:
+        return self._load("income_statement", symbols=symbols, start=start, end=end)
+
+    def save_dividend(self, df: pd.DataFrame) -> str:
+        return self._save(df, "dividend", ["symbol", "date"])
+
+    def load_dividend(
+        self,
+        symbols: Optional[List[str]] = None,
+        start: Optional[str] = None,
+        end: Optional[str] = None,
+    ) -> pd.DataFrame:
+        return self._load("dividend", symbols=symbols, start=start, end=end)
+
+    def save_indicators(self, df: pd.DataFrame) -> str:
+        return self._save(df, "indicators", ["symbol", "date"])
+
+    def load_indicators(
+        self,
+        symbols: Optional[List[str]] = None,
+        start: Optional[str] = None,
+        end: Optional[str] = None,
+    ) -> pd.DataFrame:
+        return self._load("indicators", symbols=symbols, start=start, end=end)
+
+    def get_last_date(self, table: str, symbol: str) -> Optional[str]:
+        path = self._path(table)
+        if not path.exists():
+            return None
+        source = f"'{path.as_posix()}'"
+        sql = (
+            f"SELECT MAX(date) AS last_date FROM read_parquet({source}) "
+            f"WHERE symbol = '{symbol}'"
+        )
+        result = duckdb.sql(sql).df()
+        val = result["last_date"].iloc[0]
+        if pd.isna(val):
+            return None
+        return str(val)

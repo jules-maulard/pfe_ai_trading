@@ -1,0 +1,73 @@
+from __future__ import annotations
+
+from abc import ABC, abstractmethod
+from typing import List, Optional
+
+import pandas as pd
+
+
+class BaseStorage(ABC):
+
+    @abstractmethod
+    def save_ohlcv(self, df: pd.DataFrame) -> str:
+        ...
+
+    @abstractmethod
+    def load_ohlcv(
+        self,
+        symbols: Optional[List[str]] = None,
+        start: Optional[str] = None,
+        end: Optional[str] = None,
+    ) -> pd.DataFrame:
+        ...
+
+    @abstractmethod
+    def save_asset(self, df: pd.DataFrame) -> str:
+        ...
+
+    @abstractmethod
+    def load_asset(self, symbols: Optional[List[str]] = None) -> pd.DataFrame:
+        ...
+
+    @abstractmethod
+    def save_income_statement(self, df: pd.DataFrame) -> str:
+        ...
+
+    @abstractmethod
+    def load_income_statement(
+        self,
+        symbols: Optional[List[str]] = None,
+        start: Optional[str] = None,
+        end: Optional[str] = None,
+    ) -> pd.DataFrame:
+        ...
+
+    @abstractmethod
+    def save_dividend(self, df: pd.DataFrame) -> str:
+        ...
+
+    @abstractmethod
+    def load_dividend(
+        self,
+        symbols: Optional[List[str]] = None,
+        start: Optional[str] = None,
+        end: Optional[str] = None,
+    ) -> pd.DataFrame:
+        ...
+
+    @abstractmethod
+    def save_indicators(self, df: pd.DataFrame) -> str:
+        ...
+
+    @abstractmethod
+    def load_indicators(
+        self,
+        symbols: Optional[List[str]] = None,
+        start: Optional[str] = None,
+        end: Optional[str] = None,
+    ) -> pd.DataFrame:
+        ...
+
+    @abstractmethod
+    def get_last_date(self, table: str, symbol: str) -> Optional[str]:
+        ...
