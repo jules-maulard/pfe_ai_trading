@@ -42,6 +42,36 @@ class YFinanceRetriever:
             return pd.DataFrame(columns=["symbol", "date", "open", "high", "low", "close", "volume"])
         return pd.concat(all_dfs, ignore_index=True)
 
+    def get_asset_info(self, symbol: str) -> pd.DataFrame:
+        ticker = yf.Ticker(symbol)
+        info = ticker.get_info() if hasattr(ticker, "get_info") else ticker.info
+        
+        ASSET_COLUMNS = [
+            "symbol",
+            "company_name",
+            "sector",
+            "industry",
+            "currency",
+            "country",
+            "exchange",
+            "long_business_summary",
+            "website",
+        ]
+        if not info:
+            return pd.DataFrame(columns=ASSET_COLUMNS)
+        row = {
+            "symbol": symbol,
+            "company_name": info.get("longName") or info.get("shortName"),
+            "sector": info.get("sector"),
+            "industry": info.get("industry"),
+            "currency": info.get("currency"),
+            "country": info.get("country"),
+            "exchange": info.get("exchange"),
+            "long_business_summary": info.get("longBusinessSummary"),
+            "website": info.get("website"),
+        }
+        return pd.DataFrame([row], columns=ASSET_COLUMNS)
+    
     def get_income_statement(self, symbol: str) -> pd.DataFrame:
         ticker = yf.Ticker(symbol)
         raw = ticker.income_stmt.T
