@@ -10,18 +10,6 @@ from data.storage.base_storage import BaseStorage
 
 DEFAULT_BASE_DIR = "database/csv"
 
-OHLCV_COLUMNS = ["symbol", "date", "open", "high", "low", "close", "volume"]
-ASSET_COLUMNS = ["symbol", "company_name", "sector", "currency"]
-INCOME_STATEMENT_COLUMNS = [
-    "symbol", "date", "total_revenue", "gross_profit",
-    "operating_income", "net_income", "eps",
-]
-DIVIDEND_COLUMNS = ["symbol", "date", "amount"]
-INDICATORS_COLUMNS = [
-    "symbol", "date", "rsi", "macd", "macd_signal", "macd_hist",
-]
-
-
 class CsvStorage(BaseStorage):
 
     def __init__(self, base_dir: str = DEFAULT_BASE_DIR):

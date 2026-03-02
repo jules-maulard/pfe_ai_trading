@@ -7,6 +7,8 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import List, Optional
 
+from dotenv import load_dotenv
+
 _SRC = str(Path(__file__).resolve().parent.parent.parent)
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
@@ -18,7 +20,8 @@ from data.storage.base_storage import BaseStorage
 
 
 def _build_storage() -> BaseStorage:
-    backend = os.environ.get("STORAGE_BACKEND", "csv").lower()
+    load_dotenv()
+    backend = os.environ.get("STORAGE_BACKEND", "none").lower()
 
     if backend == "csv":
         from data.storage.csv_storage import CsvStorage
@@ -33,6 +36,117 @@ def _build_storage() -> BaseStorage:
         raise ValueError(f"Unknown STORAGE_BACKEND: {backend}")
 
 
+def _today() -> str:
+    from datetime import timezone
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+
+DEFAULT_START = "2016-01-01"
+
+
+def _fetch_ohlcv_auto(
+    symbols: List[str],
+    retriever: YFinanceRetriever,
+    storage: BaseStorage,
+    start: Optional[str],
+    end: Optional[str],
+    interval: str,
+) -> pd.DataFrame:
+    frames: list[pd.DataFrame] = []
+    effective_end = end or _today()
+
+    for symbol in symbols:
+        last_date_str = storage.get_last_date("ohlcv", symbol)
+        sym_start = (
+            (pd.Timestamp(last_date_str) + timedelta(days=1)).strftime("%Y-%m-%d")
+            if last_date_str
+            else (start or DEFAULT_START)
+        )
+        if sym_start > effective_end:
+            print(f"  {symbol}: already up to date")
+            continue
+
+        print(f"  {symbol}: fetching from {sym_start} to {effective_end}")
+        df = retriever.get_ohlcv([symbol], start=sym_start, end=effective_end, interval=interval)
+        if not df.empty:
+            frames.append(df)
+
+    return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+
+
+def _fetch_ohlcv_manual(
+    symbols: List[str],
+    retriever: YFinanceRetriever,
+    start: Optional[str],
+    end: Optional[str],
+    interval: str,
+) -> pd.DataFrame:
+    effective_start = start or DEFAULT_START
+    effective_end = end or _today()
+    print(f"  Manual mode: fetching {len(symbols)} symbols from {effective_start} to {effective_end}")
+    return retriever.get_ohlcv(symbols, start=effective_start, end=effective_end, interval=interval)
+
+
+def _merge_and_save_ohlcv(new_data: pd.DataFrame, storage: BaseStorage) -> pd.DataFrame:
+    try:
+        existing = storage.load_ohlcv()
+    except FileNotFoundError:
+        existing = pd.DataFrame()
+
+    if not existing.empty:
+        merged = pd.concat([existing, new_data], ignore_index=True)
+        merged["date"] = pd.to_datetime(merged["date"], utc=True)
+        merged = merged.drop_duplicates(subset=["symbol", "date"], keep="last")
+    else:
+        merged = new_data
+
+    if "symbol" not in merged.columns and "SYMBOL" in merged.columns:
+        merged["symbol"] = merged["SYMBOL"]
+
+    saved = storage.save_ohlcv(merged)
+    summary = merged.groupby("symbol").size()
+    print(f"\nSaved {len(merged)} total rows for {len(summary)} symbols to {saved}")
+    return merged
+
+
+def ingest_ohlcv(
+    symbols: List[str],
+    retriever: YFinanceRetriever,
+    storage: BaseStorage,
+    start: Optional[str] = None,
+    end: Optional[str] = None,
+    interval: str = "1d",
+    mode: str = "auto",
+) -> pd.DataFrame:
+    if mode == "auto":
+        fetched = _fetch_ohlcv_auto(symbols, retriever, storage, start, end, interval)
+    else:
+        fetched = _fetch_ohlcv_manual(symbols, retriever, start, end, interval)
+
+    if fetched.empty:
+        print("No OHLCV data fetched.")
+        return fetched
+
+    return _merge_and_save_ohlcv(fetched, storage)
+
+
+def ingest_dividends(
+    symbols: List[str],
+    retriever: YFinanceRetriever,
+    storage: BaseStorage,
+) -> pd.DataFrame:
+    frames = [retriever.get_dividends(s) for s in symbols]
+    frames = [df for df in frames if not df.empty]
+
+    if not frames:
+        return pd.DataFrame(columns=["symbol", "date", "amount"])
+
+    combined = pd.concat(frames, ignore_index=True)
+    saved = storage.save_dividend(combined)
+    print(f"Saved {len(combined)} dividend rows to {saved}")
+    return combined
+
+
 def run_ingestion(
     symbols: List[str],
     storage: BaseStorage,
@@ -42,74 +156,9 @@ def run_ingestion(
     mode: str = "auto",
 ) -> pd.DataFrame:
     retriever = YFinanceRetriever()
-    from datetime import timezone
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
-    if mode == "auto":
-        all_ohlcv: list[pd.DataFrame] = []
-        all_dividends: list[pd.DataFrame] = []
-        for symbol in symbols:
-            last_date_str = storage.get_last_date("ohlcv", symbol)
-            if last_date_str:
-                sym_start = (pd.Timestamp(last_date_str) + timedelta(days=1)).strftime("%Y-%m-%d")
-            else:
-                sym_start = start or "2016-01-01"
-            sym_end = end or today
-            if sym_start > sym_end:
-                print(f"  {symbol}: already up to date")
-                continue
-            print(f"  {symbol}: fetching from {sym_start} to {sym_end}")
-            df = retriever.get_ohlcv([symbol], start=sym_start, end=sym_end, interval=interval)
-            if not df.empty:
-                all_ohlcv.append(df)
-            div_df = retriever.get_dividends(symbol)
-            if not div_df.empty:
-                all_dividends.append(div_df)
-        if not all_ohlcv:
-            print("No new data to ingest.")
-            return pd.DataFrame()
-        combined = pd.concat(all_ohlcv, ignore_index=True)
-        if all_dividends:
-            combined_div = pd.concat(all_dividends, ignore_index=True)
-        else:
-            combined_div = pd.DataFrame(columns=["symbol", "date", "amount"])
-    else:
-        effective_start = start or "2016-01-01"
-        effective_end = end or today
-        print(f"  Manual mode: fetching {len(symbols)} symbols from {effective_start} to {effective_end}")
-        combined = retriever.get_ohlcv(symbols, start=effective_start, end=effective_end, interval=interval)
-        all_dividends = [retriever.get_dividends(symbol) for symbol in symbols]
-        all_dividends = [df for df in all_dividends if not df.empty]
-        if all_dividends:
-            combined_div = pd.concat(all_dividends, ignore_index=True)
-        else:
-            combined_div = pd.DataFrame(columns=["symbol", "date", "amount"])
-
-    if combined.empty:
-        print("No data fetched.")
-        return combined
-
-    try:
-        existing = storage.load_ohlcv()
-    except FileNotFoundError:
-        existing = pd.DataFrame()
-
-    if not existing.empty:
-        merged = pd.concat([existing, combined], ignore_index=True)
-        merged["date"] = pd.to_datetime(merged["date"], utc=True)
-        merged = merged.drop_duplicates(subset=["symbol", "date"], keep="last")
-    else:
-        merged = combined
-
-    saved = storage.save_ohlcv(merged)
-    if "symbol" not in merged.columns and "SYMBOL" in merged.columns:
-        merged["symbol"] = merged["SYMBOL"]
-    summary = merged.groupby("symbol").size()
-    print(f"\nSaved {len(merged)} total rows for {len(summary)} symbols to {saved}")
-
-    if not combined_div.empty:
-        saved_div = storage.save_dividend(combined_div)
-        print(f"Saved {len(combined_div)} dividend rows to {saved_div}")
+    merged = ingest_ohlcv(symbols, retriever, storage, start, end, interval, mode)
+    ingest_dividends(symbols, retriever, storage)
 
     return merged
 
