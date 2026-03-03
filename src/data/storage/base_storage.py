@@ -56,7 +56,27 @@ class BaseStorage(ABC):
         ...
 
     @abstractmethod
+    def append_ohlcv(self, df: pd.DataFrame) -> str:
+        ...
+
+    @abstractmethod
+    def upsert_ohlcv(self, df: pd.DataFrame) -> str:
+        ...
+
+    @abstractmethod
+    def append_dividend(self, df: pd.DataFrame) -> str:
+        ...
+
+    @abstractmethod
+    def upsert_dividend(self, df: pd.DataFrame) -> str:
+        ...
+
+    @abstractmethod
     def save_indicators(self, df: pd.DataFrame) -> str:
+        ...
+
+    @abstractmethod
+    def upsert_indicators(self, df: pd.DataFrame) -> str:
         ...
 
     @abstractmethod

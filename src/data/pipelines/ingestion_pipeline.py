@@ -87,9 +87,19 @@ def _fetch_ohlcv_manual(
     return retriever.get_ohlcv(symbols, start=effective_start, end=effective_end, interval=interval)
 
 
-def _merge_and_save_ohlcv(new_data: pd.DataFrame, storage: BaseStorage) -> pd.DataFrame:
+def _merge_and_save_ohlcv(
+    new_data: pd.DataFrame,
+    storage: BaseStorage,
+    symbols: List[str],
+    mode: str,
+) -> pd.DataFrame:
+    if mode == "auto":
+        saved = storage.append_ohlcv(new_data)
+        print(f"\nAppended {len(new_data)} new rows for {new_data['symbol'].nunique()} symbols to {saved}")
+        return new_data
+
     try:
-        existing = storage.load_ohlcv()
+        existing = storage.load_ohlcv(symbols=symbols)
     except FileNotFoundError:
         existing = pd.DataFrame()
 
@@ -100,10 +110,10 @@ def _merge_and_save_ohlcv(new_data: pd.DataFrame, storage: BaseStorage) -> pd.Da
     else:
         merged = new_data
 
+    saved = storage.upsert_ohlcv(merged)
+
     if "symbol" not in merged.columns and "SYMBOL" in merged.columns:
         merged["symbol"] = merged["SYMBOL"]
-
-    saved = storage.save_ohlcv(merged)
     summary = merged.groupby("symbol").size()
     print(f"\nSaved {len(merged)} total rows for {len(summary)} symbols to {saved}")
     return merged
@@ -127,25 +137,58 @@ def ingest_ohlcv(
         print("No OHLCV data fetched.")
         return fetched
 
-    return _merge_and_save_ohlcv(fetched, storage)
+    return _merge_and_save_ohlcv(fetched, storage, symbols, mode)
 
 
 def ingest_dividends(
     symbols: List[str],
     retriever: YFinanceRetriever,
     storage: BaseStorage,
-) -> pd.DataFrame:
+) -> None:
     frames = [retriever.get_dividends(s) for s in symbols]
     frames = [df for df in frames if not df.empty]
 
     if not frames:
         return pd.DataFrame(columns=["symbol", "date", "amount"])
 
-    combined = pd.concat(frames, ignore_index=True)
-    saved = storage.save_dividend(combined)
-    print(f"Saved {len(combined)} dividend rows to {saved}")
+    new_data = pd.concat(frames, ignore_index=True)
+
+    try:
+        existing = storage.load_dividend(symbols=symbols)
+    except FileNotFoundError:
+        existing = pd.DataFrame()
+
+    if not existing.empty:
+        combined = pd.concat([existing, new_data], ignore_index=True)
+        combined["date"] = pd.to_datetime(combined["date"], utc=True)
+        combined = combined.drop_duplicates(subset=["symbol", "date"], keep="last")
+        new_rows = len(combined) - len(existing)
+    else:
+        combined = new_data
+        new_rows = len(combined)
+
+    if new_rows > 0:
+        saved = storage.upsert_dividend(combined)
+    else:
+        saved = None
+    print(f"Saved {new_rows} new dividend rows to {saved if saved else 'no file written'}")
     return combined
 
+def ingest_assets(
+    symbols: List[str],
+    retriever: YFinanceRetriever,
+    storage: BaseStorage,
+) -> None:
+    added_symbols = []
+    for symbol in symbols:
+        if storage.load_asset(symbols=[symbol]).empty:
+            info = retriever.get_asset_info(symbol)
+            if not info.empty:
+                storage.save_asset(info)
+                added_symbols.append(symbol)
+            else:
+                print(f"No asset info found for {symbol}")
+    print(f"Saved asset info for {len(added_symbols)} new symbols: {', '.join(added_symbols)}")
 
 def run_ingestion(
     symbols: List[str],
@@ -154,13 +197,12 @@ def run_ingestion(
     end: Optional[str] = None,
     interval: str = "1d",
     mode: str = "auto",
-) -> pd.DataFrame:
+) -> None:
     retriever = YFinanceRetriever()
 
-    merged = ingest_ohlcv(symbols, retriever, storage, start, end, interval, mode)
+    ingest_ohlcv(symbols, retriever, storage, start, end, interval, mode)
     ingest_dividends(symbols, retriever, storage)
-
-    return merged
+    ingest_assets(symbols, retriever, storage)
 
 
 def main():

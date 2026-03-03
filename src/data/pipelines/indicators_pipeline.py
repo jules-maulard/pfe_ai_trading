@@ -97,7 +97,7 @@ def run_indicators(
     indicators = indicators.dropna(subset=["rsi", "macd", "macd_signal", "macd_hist"])
     indicators = indicators.sort_values(["symbol", "date"]).reset_index(drop=True)
 
-    saved = storage.save_indicators(indicators)
+    saved = storage.upsert_indicators(indicators)
     print(f"Saved {len(indicators)} indicator rows to {saved}")
     return indicators
 

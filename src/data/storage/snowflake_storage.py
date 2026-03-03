@@ -100,8 +100,25 @@ class SnowflakeStorage(BaseStorage):
         finally:
             conn.close()
 
+    def _upsert(self, df: pd.DataFrame, table: str) -> str:
+        symbols = list(df["symbol"].unique())
+        syms_sql = ", ".join(f"'{s}'" for s in symbols)
+        conn = self._connect()
+        try:
+            cursor = conn.cursor()
+            cursor.execute(f"DELETE FROM {table.upper()} WHERE symbol IN ({syms_sql})")
+        finally:
+            conn.close()
+        return self._write(df, table)
+
     def save_ohlcv(self, df: pd.DataFrame) -> str:
+        return self._upsert(df, SNOWFLAKE_OHLCV_TABLE)
+
+    def append_ohlcv(self, df: pd.DataFrame) -> str:
         return self._write(df, SNOWFLAKE_OHLCV_TABLE)
+
+    def upsert_ohlcv(self, df: pd.DataFrame) -> str:
+        return self._upsert(df, SNOWFLAKE_OHLCV_TABLE)
 
     def load_ohlcv(
         self,
@@ -112,13 +129,13 @@ class SnowflakeStorage(BaseStorage):
         return self._read(SNOWFLAKE_OHLCV_TABLE, symbols=symbols, start=start, end=end)
 
     def save_asset(self, df: pd.DataFrame) -> str:
-        return self._write(df, SNOWFLAKE_ASSET_TABLE)
+        return self._upsert(df, SNOWFLAKE_ASSET_TABLE)
 
     def load_asset(self, symbols: Optional[List[str]] = None) -> pd.DataFrame:
         return self._read(SNOWFLAKE_ASSET_TABLE, symbols=symbols)
 
     def save_income_statement(self, df: pd.DataFrame) -> str:
-        return self._write(df, SNOWFLAKE_INCOME_STATEMENT_TABLE)
+        return self._upsert(df, SNOWFLAKE_INCOME_STATEMENT_TABLE)
 
     def load_income_statement(
         self,
@@ -129,7 +146,13 @@ class SnowflakeStorage(BaseStorage):
         return self._read(SNOWFLAKE_INCOME_STATEMENT_TABLE, symbols=symbols, start=start, end=end)
 
     def save_dividend(self, df: pd.DataFrame) -> str:
+        return self._upsert(df, SNOWFLAKE_DIVIDEND_TABLE)
+
+    def append_dividend(self, df: pd.DataFrame) -> str:
         return self._write(df, SNOWFLAKE_DIVIDEND_TABLE)
+
+    def upsert_dividend(self, df: pd.DataFrame) -> str:
+        return self._upsert(df, SNOWFLAKE_DIVIDEND_TABLE)
 
     def load_dividend(
         self,
@@ -140,7 +163,10 @@ class SnowflakeStorage(BaseStorage):
         return self._read(SNOWFLAKE_DIVIDEND_TABLE, symbols=symbols, start=start, end=end)
 
     def save_indicators(self, df: pd.DataFrame) -> str:
-        return self._write(df, SNOWFLAKE_INDICATORS_TABLE)
+        return self._upsert(df, SNOWFLAKE_INDICATORS_TABLE)
+
+    def upsert_indicators(self, df: pd.DataFrame) -> str:
+        return self._upsert(df, SNOWFLAKE_INDICATORS_TABLE)
 
     def load_indicators(
         self,

@@ -53,8 +53,28 @@ class ParquetStorage(BaseStorage):
 
         return duckdb.sql(sql).df()
 
+    def _upsert(self, df: pd.DataFrame, table: str, sort_cols: List[str]) -> str:
+        path = self._path(table)
+        symbols = list(df["symbol"].unique())
+        if path.exists():
+            syms_sql = ", ".join(f"'{s}'" for s in symbols)
+            source = f"'{path.as_posix()}'"
+            others = duckdb.sql(
+                f"SELECT * FROM read_parquet({source}) WHERE symbol NOT IN ({syms_sql})"
+            ).df()
+            combined = pd.concat([others, df], ignore_index=True)
+        else:
+            combined = df
+        return self._save(combined, table, sort_cols)
+
     def save_ohlcv(self, df: pd.DataFrame) -> str:
-        return self._save(df, "ohlcv", ["symbol", "date"])
+        return self._upsert(df, "ohlcv", ["symbol", "date"])
+
+    def append_ohlcv(self, df: pd.DataFrame) -> str:
+        return self._upsert(df, "ohlcv", ["symbol", "date"])
+
+    def upsert_ohlcv(self, df: pd.DataFrame) -> str:
+        return self._upsert(df, "ohlcv", ["symbol", "date"])
 
     def load_ohlcv(
         self,
@@ -65,13 +85,13 @@ class ParquetStorage(BaseStorage):
         return self._load("ohlcv", symbols=symbols, start=start, end=end)
 
     def save_asset(self, df: pd.DataFrame) -> str:
-        return self._save(df, "asset", ["symbol"])
+        return self._upsert(df, "asset", ["symbol"])
 
     def load_asset(self, symbols: Optional[List[str]] = None) -> pd.DataFrame:
         return self._load("asset", symbols=symbols)
 
     def save_income_statement(self, df: pd.DataFrame) -> str:
-        return self._save(df, "income_statement", ["symbol", "date"])
+        return self._upsert(df, "income_statement", ["symbol", "date"])
 
     def load_income_statement(
         self,
@@ -82,7 +102,13 @@ class ParquetStorage(BaseStorage):
         return self._load("income_statement", symbols=symbols, start=start, end=end)
 
     def save_dividend(self, df: pd.DataFrame) -> str:
-        return self._save(df, "dividend", ["symbol", "date"])
+        return self._upsert(df, "dividend", ["symbol", "date"])
+
+    def append_dividend(self, df: pd.DataFrame) -> str:
+        return self._upsert(df, "dividend", ["symbol", "date"])
+
+    def upsert_dividend(self, df: pd.DataFrame) -> str:
+        return self._upsert(df, "dividend", ["symbol", "date"])
 
     def load_dividend(
         self,
@@ -93,7 +119,10 @@ class ParquetStorage(BaseStorage):
         return self._load("dividend", symbols=symbols, start=start, end=end)
 
     def save_indicators(self, df: pd.DataFrame) -> str:
-        return self._save(df, "indicators", ["symbol", "date"])
+        return self._upsert(df, "indicators", ["symbol", "date"])
+
+    def upsert_indicators(self, df: pd.DataFrame) -> str:
+        return self._upsert(df, "indicators", ["symbol", "date"])
 
     def load_indicators(
         self,
