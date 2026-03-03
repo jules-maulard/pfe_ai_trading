@@ -30,19 +30,6 @@ class BaseStorage(ABC):
         ...
 
     @abstractmethod
-    def save_income_statement(self, df: pd.DataFrame) -> str:
-        ...
-
-    @abstractmethod
-    def load_income_statement(
-        self,
-        symbols: Optional[List[str]] = None,
-        start: Optional[str] = None,
-        end: Optional[str] = None,
-    ) -> pd.DataFrame:
-        ...
-
-    @abstractmethod
     def save_dividend(self, df: pd.DataFrame) -> str:
         ...
 
@@ -69,23 +56,6 @@ class BaseStorage(ABC):
 
     @abstractmethod
     def upsert_dividend(self, df: pd.DataFrame) -> str:
-        ...
-
-    @abstractmethod
-    def save_indicators(self, df: pd.DataFrame) -> str:
-        ...
-
-    @abstractmethod
-    def upsert_indicators(self, df: pd.DataFrame) -> str:
-        ...
-
-    @abstractmethod
-    def load_indicators(
-        self,
-        symbols: Optional[List[str]] = None,
-        start: Optional[str] = None,
-        end: Optional[str] = None,
-    ) -> pd.DataFrame:
         ...
 
     @abstractmethod

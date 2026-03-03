@@ -90,17 +90,6 @@ class ParquetStorage(BaseStorage):
     def load_asset(self, symbols: Optional[List[str]] = None) -> pd.DataFrame:
         return self._load("asset", symbols=symbols)
 
-    def save_income_statement(self, df: pd.DataFrame) -> str:
-        return self._upsert(df, "income_statement", ["symbol", "date"])
-
-    def load_income_statement(
-        self,
-        symbols: Optional[List[str]] = None,
-        start: Optional[str] = None,
-        end: Optional[str] = None,
-    ) -> pd.DataFrame:
-        return self._load("income_statement", symbols=symbols, start=start, end=end)
-
     def save_dividend(self, df: pd.DataFrame) -> str:
         return self._upsert(df, "dividend", ["symbol", "date"])
 
@@ -117,20 +106,6 @@ class ParquetStorage(BaseStorage):
         end: Optional[str] = None,
     ) -> pd.DataFrame:
         return self._load("dividend", symbols=symbols, start=start, end=end)
-
-    def save_indicators(self, df: pd.DataFrame) -> str:
-        return self._upsert(df, "indicators", ["symbol", "date"])
-
-    def upsert_indicators(self, df: pd.DataFrame) -> str:
-        return self._upsert(df, "indicators", ["symbol", "date"])
-
-    def load_indicators(
-        self,
-        symbols: Optional[List[str]] = None,
-        start: Optional[str] = None,
-        end: Optional[str] = None,
-    ) -> pd.DataFrame:
-        return self._load("indicators", symbols=symbols, start=start, end=end)
 
     def get_last_date(self, table: str, symbol: str) -> Optional[str]:
         path = self._path(table)

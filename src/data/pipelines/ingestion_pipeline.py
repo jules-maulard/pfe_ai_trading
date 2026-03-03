@@ -95,6 +95,8 @@ def _merge_and_save_ohlcv(
 ) -> pd.DataFrame:
     if mode == "auto":
         saved = storage.append_ohlcv(new_data)
+        if "symbol" not in new_data.columns and "SYMBOL" in new_data.columns:
+            new_data["symbol"] = new_data["SYMBOL"]
         print(f"\nAppended {len(new_data)} new rows for {new_data['symbol'].nunique()} symbols to {saved}")
         return new_data
 
@@ -158,9 +160,17 @@ def ingest_dividends(
     except FileNotFoundError:
         existing = pd.DataFrame()
 
+
+    def normalize_date_to_midnight_utc(df):
+        df["date"] = pd.to_datetime(df["date"], utc=True)
+        # Force to midnight UTC, then remove tzinfo for compatibility with Snowflake DATE
+        df["date"] = df["date"].dt.normalize().dt.tz_localize(None)
+        return df
+
+    new_data = normalize_date_to_midnight_utc(new_data)
     if not existing.empty:
+        existing = normalize_date_to_midnight_utc(existing)
         combined = pd.concat([existing, new_data], ignore_index=True)
-        combined["date"] = pd.to_datetime(combined["date"], utc=True)
         combined = combined.drop_duplicates(subset=["symbol", "date"], keep="last")
         new_rows = len(combined) - len(existing)
     else:

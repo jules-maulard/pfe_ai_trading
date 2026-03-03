@@ -9,9 +9,7 @@ from data.storage.base_storage import BaseStorage
 
 SNOWFLAKE_OHLCV_TABLE = "ohlcv"
 SNOWFLAKE_ASSET_TABLE = "asset"
-SNOWFLAKE_INCOME_STATEMENT_TABLE = "income_statement"
 SNOWFLAKE_DIVIDEND_TABLE = "dividend"
-SNOWFLAKE_INDICATORS_TABLE = "indicators"
 
 
 class SnowflakeStorage(BaseStorage):
@@ -134,17 +132,6 @@ class SnowflakeStorage(BaseStorage):
     def load_asset(self, symbols: Optional[List[str]] = None) -> pd.DataFrame:
         return self._read(SNOWFLAKE_ASSET_TABLE, symbols=symbols)
 
-    def save_income_statement(self, df: pd.DataFrame) -> str:
-        return self._upsert(df, SNOWFLAKE_INCOME_STATEMENT_TABLE)
-
-    def load_income_statement(
-        self,
-        symbols: Optional[List[str]] = None,
-        start: Optional[str] = None,
-        end: Optional[str] = None,
-    ) -> pd.DataFrame:
-        return self._read(SNOWFLAKE_INCOME_STATEMENT_TABLE, symbols=symbols, start=start, end=end)
-
     def save_dividend(self, df: pd.DataFrame) -> str:
         return self._upsert(df, SNOWFLAKE_DIVIDEND_TABLE)
 
@@ -161,20 +148,6 @@ class SnowflakeStorage(BaseStorage):
         end: Optional[str] = None,
     ) -> pd.DataFrame:
         return self._read(SNOWFLAKE_DIVIDEND_TABLE, symbols=symbols, start=start, end=end)
-
-    def save_indicators(self, df: pd.DataFrame) -> str:
-        return self._upsert(df, SNOWFLAKE_INDICATORS_TABLE)
-
-    def upsert_indicators(self, df: pd.DataFrame) -> str:
-        return self._upsert(df, SNOWFLAKE_INDICATORS_TABLE)
-
-    def load_indicators(
-        self,
-        symbols: Optional[List[str]] = None,
-        start: Optional[str] = None,
-        end: Optional[str] = None,
-    ) -> pd.DataFrame:
-        return self._read(SNOWFLAKE_INDICATORS_TABLE, symbols=symbols, start=start, end=end)
 
     def get_last_date(self, table: str, symbol: str) -> Optional[str]:
         sql = (
