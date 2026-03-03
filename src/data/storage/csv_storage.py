@@ -32,7 +32,7 @@ class CsvStorage(BaseStorage):
 
     def _save(self, df: pd.DataFrame, table: str, sort_cols: List[str]) -> str:
         path = self._path(table)
-        df.sort_values(sort_cols).to_csv(path, index=False)
+        df.to_csv(path, index=False)
         return str(path)
 
     def _load(
@@ -64,7 +64,7 @@ class CsvStorage(BaseStorage):
 
     def _append(self, df: pd.DataFrame, table: str, sort_cols: List[str]) -> str:
         path = self._path(table)
-        df.sort_values(sort_cols).to_csv(path, mode="a", header=False, index=False)
+        df.to_csv(path, mode="a", header=False, index=False)
         return str(path)
 
     def _upsert(self, df: pd.DataFrame, table: str, sort_cols: List[str]) -> str:
