@@ -59,9 +59,14 @@ class YFinanceRetriever:
         ]
         if not info:
             return pd.DataFrame(columns=ASSET_COLUMNS)
+
+        company_name = info.get("longName") or info.get("shortName")
+        if info.get("quoteType") == "NONE" or not company_name:
+            return pd.DataFrame(columns=ASSET_COLUMNS)
+
         row = {
             "symbol": symbol,
-            "company_name": info.get("longName") or info.get("shortName"),
+            "company_name": company_name,
             "sector": info.get("sector"),
             "industry": info.get("industry"),
             "currency": info.get("currency"),

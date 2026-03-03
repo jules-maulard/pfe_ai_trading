@@ -40,10 +40,8 @@ class ParquetStorage(BaseStorage):
     def _save(self, df: pd.DataFrame, table: str, sort_cols: List[str]) -> str:
         path = self._path(table)
         if "date" in df.columns:
-            df["date"] = pd.to_datetime(df["date"], errors="coerce")
-            if hasattr(df["date"].dt, "tz") and df["date"].dt.tz is not None:
-                df["date"] = df["date"].dt.tz_convert(None)
-            df["date"] = df["date"].dt.tz_localize(None)
+            df = df.copy()
+            df["date"] = pd.to_datetime(df["date"], utc=True, errors="coerce").dt.tz_localize(None)
         df.sort_values(sort_cols).to_parquet(path, index=False, engine="pyarrow")
         return str(path)
 
