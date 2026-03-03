@@ -163,7 +163,6 @@ def ingest_dividends(
 
     def normalize_date_to_midnight_utc(df):
         df["date"] = pd.to_datetime(df["date"], utc=True)
-        # Force to midnight UTC, then remove tzinfo for compatibility with Snowflake DATE
         df["date"] = df["date"].dt.normalize().dt.tz_localize(None)
         return df
 

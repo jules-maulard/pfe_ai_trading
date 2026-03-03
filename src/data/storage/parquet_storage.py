@@ -16,13 +16,34 @@ class ParquetStorage(BaseStorage):
     def __init__(self, base_dir: str = DEFAULT_BASE_DIR):
         self.base_dir = Path(base_dir)
         self.base_dir.mkdir(parents=True, exist_ok=True)
+        self.tables = ["ohlcv", "asset", "dividend"]
+        for table in self.tables:
+            path = self._path(table)
+            if not path.exists():
+                if table == "ohlcv":
+                    columns = ["symbol", "date", "open", "high", "low", "close", "volume"]
+                elif table == "asset":
+                    columns = [
+                        "symbol", "company_name", "sector", "industry", "currency",
+                        "country", "exchange", "long_business_summary", "website"
+                    ]
+                elif table == "dividend":
+                    columns = ["symbol", "date", "amount"]
+                else:
+                    columns = []
+                df = pd.DataFrame(columns=columns)
+                df.to_parquet(path, index=False, engine="pyarrow")
 
     def _path(self, table: str) -> Path:
         return self.base_dir / f"{table}.parquet"
 
     def _save(self, df: pd.DataFrame, table: str, sort_cols: List[str]) -> str:
         path = self._path(table)
-        path.parent.mkdir(parents=True, exist_ok=True)
+        if "date" in df.columns:
+            df["date"] = pd.to_datetime(df["date"], errors="coerce")
+            if hasattr(df["date"].dt, "tz") and df["date"].dt.tz is not None:
+                df["date"] = df["date"].dt.tz_convert(None)
+            df["date"] = df["date"].dt.tz_localize(None)
         df.sort_values(sort_cols).to_parquet(path, index=False, engine="pyarrow")
         return str(path)
 
