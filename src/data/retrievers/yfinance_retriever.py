@@ -1,10 +1,20 @@
 from __future__ import annotations
 
+import sys
 import time
+from pathlib import Path
 from typing import List, Optional
 
 import pandas as pd
 import yfinance as yf
+
+_SRC = str(Path(__file__).resolve().parent.parent.parent)
+if _SRC not in sys.path:
+    sys.path.insert(0, _SRC)
+
+from utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 CAC40_TICKERS = [
@@ -35,6 +45,7 @@ class YFinanceRetriever:
         all_dfs: list[pd.DataFrame] = []
         for i in range(0, len(symbols), BATCH_SIZE):
             batch = symbols[i : i + BATCH_SIZE]
+            logger.debug("Downloading batch [%d:%d]: %s", i, i + BATCH_SIZE, batch)
             raw = self._download_with_retry(batch, start, end, interval)
             df = self._normalize_ohlcv(raw, batch)
             all_dfs.append(df)
@@ -131,7 +142,10 @@ class YFinanceRetriever:
             except Exception as e:
                 last_exc = e
                 if attempt < self.max_retries:
-                    time.sleep((2 ** attempt) * self.backoff_base)
+                    wait = (2 ** attempt) * self.backoff_base
+                    logger.warning("Download attempt %d/%d failed for %s: %s — retrying in %.1fs", attempt + 1, self.max_retries + 1, tickers_str, e, wait)
+                    time.sleep(wait)
+        logger.error("Download failed after %d retries for %s: %s", self.max_retries, tickers_str, last_exc)
         raise RuntimeError(f"Failed after {self.max_retries} retries: {last_exc}")
 
     @staticmethod

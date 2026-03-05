@@ -1,11 +1,20 @@
 from __future__ import annotations
 
 import os
+import sys
+from pathlib import Path
 from typing import List, Optional
 
 import pandas as pd
 
+_SRC = str(Path(__file__).resolve().parent.parent.parent)
+if _SRC not in sys.path:
+    sys.path.insert(0, _SRC)
+
 from data.storage.base_storage import BaseStorage
+from utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 SNOWFLAKE_OHLCV_TABLE = "ohlcv"
 SNOWFLAKE_ASSET_TABLE = "asset"
@@ -49,6 +58,7 @@ class SnowflakeStorage(BaseStorage):
         self.warehouse = warehouse or os.environ.get("SNOWFLAKE_WAREHOUSE", "COMPUTE_WH")
 
     def _connect(self):
+        logger.debug("Connecting to Snowflake: %s.%s", self.database, self.schema)
         return self._sf.connect(
             account=self.account,
             user=self.user,
@@ -59,6 +69,7 @@ class SnowflakeStorage(BaseStorage):
         )
 
     def _write(self, df: pd.DataFrame, table: str) -> str:
+        logger.debug("Writing %d rows to %s", len(df), table.upper())
         conn = self._connect()
         try:
             if "date" in df.columns:
@@ -76,6 +87,7 @@ class SnowflakeStorage(BaseStorage):
         start: Optional[str] = None,
         end: Optional[str] = None,
     ) -> pd.DataFrame:
+        logger.debug("Reading %s (symbols=%s, start=%s, end=%s)", table.upper(), symbols, start, end)
         sql = f"SELECT * FROM {table.upper()}"
         conditions = []
         if symbols:
@@ -100,6 +112,7 @@ class SnowflakeStorage(BaseStorage):
 
     def _upsert(self, df: pd.DataFrame, table: str) -> str:
         symbols = list(df["symbol"].unique())
+        logger.debug("Upserting %d rows for %d symbol(s) into %s", len(df), len(symbols), table.upper())
         syms_sql = ", ".join(f"'{s}'" for s in symbols)
         conn = self._connect()
         try:

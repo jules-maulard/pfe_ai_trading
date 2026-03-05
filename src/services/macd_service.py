@@ -12,6 +12,9 @@ from typing import Any, Dict, List, Optional
 
 from data.storage.base_storage import BaseStorage
 from data.storage.csv_storage import CsvStorage
+from utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 class MACDService:
@@ -29,6 +32,7 @@ class MACDService:
         end: Optional[str] = None,
         sample_rows: int = 5,
     ) -> Dict[str, Any]:
+        logger.debug("compute_macd: fast=%d slow=%d signal=%d symbols=%s start=%s end=%s", fast, slow, signal, symbols, start, end)
         df = self.storage.load_ohlcv(symbols=symbols, start=start, end=end)
 
         needed = {"symbol", "date", price_col}
@@ -94,6 +98,7 @@ class MACDService:
         sample_rows: int = 10,
     ) -> Dict[str, Any]:
         """Detect MACD / signal-line and MACD / zero-line crossovers."""
+        logger.debug("detect_crossovers: symbols=%s start=%s end=%s", symbols, start, end)
         df = self.storage.load_ohlcv(symbols=symbols, start=start, end=end)
         macd_df = self.compute_macd(df, price_col=price_col, fast=fast, slow=slow, signal=signal)
         macd_df = (
@@ -168,6 +173,7 @@ class MACDService:
         sample_rows: int = 10,
     ) -> Dict[str, Any]:
         """Detect regular and hidden divergences between price and MACD."""
+        logger.debug("find_divergences: symbols=%s start=%s end=%s pivot_lookback=%d", symbols, start, end, pivot_lookback)
         df = self.storage.load_ohlcv(symbols=symbols, start=start, end=end)
         macd_df = self.compute_macd(df, price_col=price_col, fast=fast, slow=slow, signal=signal)
         macd_df = (

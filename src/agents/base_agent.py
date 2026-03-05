@@ -12,10 +12,18 @@ from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 
+_SRC = str(Path(__file__).resolve().parent.parent)
+if _SRC not in sys.path:
+    sys.path.insert(0, _SRC)
+
+from utils.logger import get_logger
+
+logger = get_logger(__name__)
+
 try:
     from groq import AsyncGroq
 except ImportError:
-    print("The 'groq' package is not installed. Run: pip install groq")
+    logger.error("The 'groq' package is not installed. Run: pip install groq")
     sys.exit(1)
 
 from fastmcp import Client
@@ -87,7 +95,7 @@ class BaseMCPAgent:
         self.messages = [{"role": "system", "content": await self._build_system_prompt()}]
 
         tool_names = [t["function"]["name"] for t in self.openai_tools]
-        print(f"Connected to MCP server — {len(tool_names)} tool(s): {tool_names}")
+        logger.info("Connected to MCP server — %d tool(s): %s", len(tool_names), tool_names)
 
     async def disconnect(self):
         if self.mcp_client:
@@ -107,7 +115,7 @@ class BaseMCPAgent:
         return system_prompt
 
     async def _call_mcp_tool(self, name: str, arguments: Dict[str, Any]) -> str:
-        print(f"  Tool call: {name}({json.dumps(arguments, ensure_ascii=False)})")
+        logger.debug("Tool call: %s(%s)", name, json.dumps(arguments, ensure_ascii=False))
         try:
             result = await self.mcp_client.call_tool(name, arguments, timeout=60.0)
             data = result.structured_content or result.data
@@ -131,7 +139,7 @@ class BaseMCPAgent:
             return json.dumps({"error": str(e)})
 
     async def _read_mcp_resource(self, uri: str) -> str:
-        print(f"  Resource read: {uri}")
+        logger.debug("Resource read: %s", uri)
         try:
             result = await self.mcp_client.read_resource(uri)
             if isinstance(result, str):
@@ -145,7 +153,7 @@ class BaseMCPAgent:
             return json.dumps({"error": str(e)})
 
     async def _use_mcp_prompt(self, prompt_name: str, arguments: Dict[str, Any] | None = None) -> str:
-        print(f"  Prompt invoke: {prompt_name}({json.dumps(arguments or {}, ensure_ascii=False)})")
+        logger.debug("Prompt invoke: %s(%s)", prompt_name, json.dumps(arguments or {}, ensure_ascii=False))
         try:
             result = await self.mcp_client.get_prompt(prompt_name, arguments or {})
             if hasattr(result, 'messages') and result.messages:
@@ -203,7 +211,7 @@ class BaseMCPAgent:
 
     async def reset_conversation(self):
         self.messages = [{"role": "system", "content": await self._build_system_prompt()}]
-        print("  Conversation reset.")
+        logger.info("Conversation reset")
 
 
 async def interactive_loop(agent: BaseMCPAgent, agent_name: str):
@@ -243,7 +251,7 @@ async def interactive_loop(agent: BaseMCPAgent, agent_name: str):
             continue
         if user_input.lower() == "/resources":
             if not agent.resources:
-                print("  No resources available.")
+                print("No resources available.")
             else:
                 for r in agent.resources:
                     desc = getattr(r, 'description', '') or ''
@@ -253,12 +261,12 @@ async def interactive_loop(agent: BaseMCPAgent, agent_name: str):
             continue
         if user_input.lower() == "/prompts":
             if not agent.prompts:
-                print("  No prompts available.")
+                print("No prompts available.")
             else:
                 for p in agent.prompts:
                     desc = p.description or ""
                     arg_names = [a.name for a in (p.arguments or [])]
-                    params = f" <{'>  <'.join(arg_names)}>" if arg_names else ""
+                    params = f" <{'> <'.join(arg_names)}>" if arg_names else ""
                     print(f"  - /prompt {p.name}{params}")
                     if desc:
                         print(f"    {desc[:100]}")
@@ -266,7 +274,7 @@ async def interactive_loop(agent: BaseMCPAgent, agent_name: str):
         if user_input.lower().startswith("/prompt "):
             parts = user_input.split(None, 2)  # /prompt name arg1=val1 arg2=val2 ...
             if len(parts) < 2:
-                print("  Usage: /prompt <name> [key=value ...]")
+                print("Usage: /prompt <name> [key=value ...]")
                 continue
             prompt_name = parts[1]
             # Parse key=value arguments
@@ -285,18 +293,18 @@ async def interactive_loop(agent: BaseMCPAgent, agent_name: str):
                             prompt_args[first_arg] = kv
             try:
                 prompt_text = await agent._use_mcp_prompt(prompt_name, prompt_args)
-                print(f"  Prompt loaded → sending to agent...\n")
+                logger.info("Prompt loaded — sending to agent...")
                 response = await agent.chat(prompt_text)
                 print(f"\nAgent > {response}\n")
             except Exception as e:
-                print(f"\nError: {e}\n")
+                logger.error("Prompt execution failed: %s", e, exc_info=True)
             continue
 
         try:
             response = await agent.chat(user_input)
             print(f"\nAgent > {response}\n")
         except Exception as e:
-            print(f"\nError: {e}\n")
+            logger.error("Chat error: %s", e, exc_info=True)
 
 
 async def run_agent(agent_name: str, mcp_server_script: str, system_prompt: str, default_model: str = "openai/gpt-oss-20b"):
@@ -306,8 +314,7 @@ async def run_agent(agent_name: str, mcp_server_script: str, system_prompt: str,
 
     api_key = os.environ.get("GROQ_API_KEY") or os.environ.get("OPENAI_API_KEY")
     if not api_key or not api_key.startswith("gsk_"):
-        print("GROQ_API_KEY not set or invalid.")
-        print("Add it to the .env file at the project root (see .env.example).")
+        logger.error("GROQ_API_KEY not set or invalid. Add it to the .env file at the project root.")
         sys.exit(1)
 
     agent = BaseMCPAgent(mcp_server_script, system_prompt, model=args.model)

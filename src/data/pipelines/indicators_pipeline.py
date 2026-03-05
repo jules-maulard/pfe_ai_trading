@@ -13,6 +13,9 @@ if _SRC not in sys.path:
 import pandas as pd
 
 from data.storage.base_storage import BaseStorage
+from utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 def _build_storage() -> BaseStorage:
@@ -80,17 +83,17 @@ def run_indicators(
     macd_slow: int = 26,
     macd_signal: int = 9,
 ) -> pd.DataFrame:
-    print("Loading OHLCV data from storage ...")
+    logger.info("Loading OHLCV data from storage")
     ohlcv = storage.load_ohlcv(symbols=symbols, start=start, end=end)
 
     if ohlcv.empty:
-        print("No OHLCV data found. Run ingestion first.")
+        logger.warning("No OHLCV data found. Run ingestion first.")
         return pd.DataFrame()
 
-    print(f"Computing RSI({rsi_window}) ...")
+    logger.info("Computing RSI(%d)", rsi_window)
     rsi_df = compute_rsi(ohlcv, window=rsi_window)
 
-    print(f"Computing MACD({macd_fast},{macd_slow},{macd_signal}) ...")
+    logger.info("Computing MACD(%d, %d, %d)", macd_fast, macd_slow, macd_signal)
     macd_df = compute_macd(rsi_df, fast=macd_fast, slow=macd_slow, signal=macd_signal)
 
     indicators = macd_df[["symbol", "date", "rsi", "macd", "macd_signal", "macd_hist"]].copy()
@@ -98,7 +101,7 @@ def run_indicators(
     indicators = indicators.sort_values(["symbol", "date"]).reset_index(drop=True)
 
     saved = storage.upsert_indicators(indicators)
-    print(f"Saved {len(indicators)} indicator rows to {saved}")
+    logger.info("Saved %d indicator rows to %s", len(indicators), saved)
     return indicators
 
 
@@ -119,7 +122,7 @@ def main():
 
     storage = _build_storage()
 
-    print(f"Backend: {os.environ.get('STORAGE_BACKEND', 'csv')}")
+    logger.info("Backend: %s", os.environ.get('STORAGE_BACKEND', 'csv'))
     run_indicators(
         storage=storage,
         symbols=symbols,

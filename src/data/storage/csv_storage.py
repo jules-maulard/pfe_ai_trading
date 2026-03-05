@@ -7,6 +7,9 @@ import duckdb
 import pandas as pd
 
 from data.storage.base_storage import BaseStorage
+from utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 DEFAULT_BASE_DIR = "database/csv"
 
@@ -32,6 +35,7 @@ class CsvStorage(BaseStorage):
 
     def _save(self, df: pd.DataFrame, table: str, sort_cols: List[str]) -> str:
         path = self._path(table)
+        logger.debug("Saving %d rows to %s", len(df), path)
         df.to_csv(path, index=False)
         return str(path)
 
@@ -45,6 +49,8 @@ class CsvStorage(BaseStorage):
         path = self._path(table)
         if not path.exists():
             raise FileNotFoundError(f"Data file not found: {path}")
+
+        logger.debug("Loading %s (symbols=%s, start=%s, end=%s)", table, symbols, start, end)
 
         source = f"'{path.as_posix()}'"
         sql = f"SELECT * FROM read_csv_auto({source})"

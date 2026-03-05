@@ -11,6 +11,9 @@ if _SRC not in sys.path:
 
 from data.retrievers.yfinance_retriever import CAC40_TICKERS
 from data.storage.base_storage import BaseStorage
+from utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 def _build_storage() -> BaseStorage:
@@ -54,9 +57,9 @@ def main():
     storage = _build_storage()
     backend_name = os.environ.get("STORAGE_BACKEND", "csv")
 
-    print(f"=== FULL PIPELINE === Backend: {backend_name} | Mode: {args.mode} | Symbols: {len(symbols)}")
+    logger.info("=== FULL PIPELINE === Backend: %s | Mode: %s | Symbols: %d", backend_name, args.mode, len(symbols))
 
-    print("\n--- Step 1: Ingestion ---")
+    logger.info("--- Step 1: Ingestion ---")
     from data.pipelines.ingestion_pipeline import run_ingestion
 
     run_ingestion(
@@ -68,7 +71,7 @@ def main():
         mode=args.mode,
     )
 
-    print("\n--- Step 2: Indicators ---")
+    logger.info("--- Step 2: Indicators ---")
     from data.pipelines.indicators_pipeline import run_indicators
 
     tickers_filter = symbols if args.tickers else None
@@ -83,7 +86,7 @@ def main():
         macd_signal=args.macd_signal,
     )
 
-    print("\n=== FULL PIPELINE COMPLETE ===")
+    logger.info("=== FULL PIPELINE COMPLETE ===")
 
 
 def run_full(
@@ -104,9 +107,9 @@ def run_full(
     storage = _build_storage()
     backend_name = os.environ.get("STORAGE_BACKEND", "csv")
 
-    print(f"=== FULL PIPELINE === Backend: {backend_name} | Mode: {mode} | Symbols: {len(effective_symbols)}")
+    logger.info("=== FULL PIPELINE === Backend: %s | Mode: %s | Symbols: %d", backend_name, mode, len(effective_symbols))
 
-    print("\n--- Step 1: Ingestion ---")
+    logger.info("--- Step 1: Ingestion ---")
     run_ingestion(
         symbols=effective_symbols,
         storage=storage,
@@ -116,7 +119,7 @@ def run_full(
         mode=mode,
     )
 
-    print("\n--- Step 2: Indicators ---")
+    logger.info("--- Step 2: Indicators ---")
     run_indicators(
         storage=storage,
         symbols=symbols,
@@ -128,7 +131,7 @@ def run_full(
         macd_signal=macd_signal,
     )
 
-    print("\n=== FULL PIPELINE COMPLETE ===")
+    logger.info("=== FULL PIPELINE COMPLETE ===")
 
 
 if __name__ == "__main__":

@@ -12,6 +12,9 @@ from typing import Any, Dict, List, Optional
 
 from data.storage.base_storage import BaseStorage
 from data.storage.csv_storage import CsvStorage
+from utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 class RSIService:
@@ -27,6 +30,7 @@ class RSIService:
         end: Optional[str] = None,
         sample_rows: int = 5,
     ) -> Dict[str, Any]:
+        logger.debug("compute_rsi: window=%d symbols=%s start=%s end=%s", window, symbols, start, end)
         df = self.storage.load_ohlcv(symbols=symbols, start=start, end=end)
 
         needed = {"symbol", "date", price_col}
@@ -95,6 +99,7 @@ class RSIService:
         sample_rows: int = 10,
     ) -> Dict[str, Any]:
         """Identify periods where the RSI crosses overbought / oversold thresholds."""
+        logger.debug("detect_extremes: symbols=%s overbought=%.1f oversold=%.1f start=%s end=%s", symbols, overbought, oversold, start, end)
         df = self.storage.load_ohlcv(symbols=symbols, start=start, end=end)
         rsi_df = self.compute_rsi_wilder(df, price_col=price_col, window=window)
         rsi_col = f"rsi{window}"
@@ -147,6 +152,7 @@ class RSIService:
         sample_rows: int = 10,
     ) -> Dict[str, Any]:
         """Detect regular and hidden divergences between price and RSI."""
+        logger.debug("find_divergences: symbols=%s start=%s end=%s pivot_lookback=%d", symbols, start, end, pivot_lookback)
         df = self.storage.load_ohlcv(symbols=symbols, start=start, end=end)
         rsi_df = self.compute_rsi_wilder(df, price_col=price_col, window=window)
         rsi_col = f"rsi{window}"
@@ -224,6 +230,7 @@ class RSIService:
         if timeframes is None:
             timeframes = ["1D", "1W", "1ME"]
 
+        logger.debug("analyze_multi_timeframe_rsi: symbols=%s timeframes=%s start=%s end=%s", symbols, timeframes, start, end)
         df = self.storage.load_ohlcv(symbols=symbols, start=start, end=end)
         needed = {"symbol", "date", price_col}
         missing = needed - set(df.columns)
@@ -291,6 +298,7 @@ class RSIService:
         *Bearish failure swing*: RSI rises above overbought, drops, rises again
         (stays below overbought), then breaks the drop low.
         """
+        logger.debug("detect_failure_swings: symbols=%s overbought=%.1f oversold=%.1f start=%s end=%s", symbols, overbought, oversold, start, end)
         df = self.storage.load_ohlcv(symbols=symbols, start=start, end=end)
         rsi_df = self.compute_rsi_wilder(df, price_col=price_col, window=window)
         rsi_col = f"rsi{window}"

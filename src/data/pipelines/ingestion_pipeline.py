@@ -17,6 +17,9 @@ import pandas as pd
 
 from data.retrievers.yfinance_retriever import CAC40_TICKERS, YFinanceRetriever
 from data.storage.base_storage import BaseStorage
+from utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 def _build_storage() -> BaseStorage:
@@ -63,10 +66,10 @@ def _fetch_ohlcv_auto(
             else (start or DEFAULT_START)
         )
         if sym_start > effective_end:
-            print(f"  {symbol}: already up to date")
+            logger.debug("%s: already up to date", symbol)
             continue
 
-        print(f"  {symbol}: fetching from {sym_start} to {effective_end}")
+        logger.info("%s: fetching from %s to %s", symbol, sym_start, effective_end)
         df = retriever.get_ohlcv([symbol], start=sym_start, end=effective_end, interval=interval)
         if not df.empty:
             frames.append(df)
@@ -83,7 +86,7 @@ def _fetch_ohlcv_manual(
 ) -> pd.DataFrame:
     effective_start = start or DEFAULT_START
     effective_end = end or _today()
-    print(f"  Manual mode: fetching {len(symbols)} symbols from {effective_start} to {effective_end}")
+    logger.info("Manual mode: fetching %d symbols from %s to %s", len(symbols), effective_start, effective_end)
     return retriever.get_ohlcv(symbols, start=effective_start, end=effective_end, interval=interval)
 
 
@@ -97,7 +100,7 @@ def _merge_and_save_ohlcv(
         saved = storage.append_ohlcv(new_data)
         if "symbol" not in new_data.columns and "SYMBOL" in new_data.columns:
             new_data["symbol"] = new_data["SYMBOL"]
-        print(f"\nAppended {len(new_data)} new rows for {new_data['symbol'].nunique()} symbols to {saved}")
+        logger.info("Appended %d new rows for %d symbols to %s", len(new_data), new_data['symbol'].nunique(), saved)
         return new_data
 
     try:
@@ -117,7 +120,7 @@ def _merge_and_save_ohlcv(
     if "symbol" not in merged.columns and "SYMBOL" in merged.columns:
         merged["symbol"] = merged["SYMBOL"]
     summary = merged.groupby("symbol").size()
-    print(f"\nSaved {len(merged)} total rows for {len(summary)} symbols to {saved}")
+    logger.info("Saved %d total rows for %d symbols to %s", len(merged), len(summary), saved)
     return merged
 
 
@@ -136,7 +139,7 @@ def ingest_ohlcv(
         fetched = _fetch_ohlcv_manual(symbols, retriever, start, end, interval)
 
     if fetched.empty:
-        print("No OHLCV data fetched.")
+        logger.warning("No OHLCV data fetched.")
         return fetched
 
     return _merge_and_save_ohlcv(fetched, storage, symbols, mode)
@@ -180,7 +183,7 @@ def ingest_dividends(
         saved = storage.upsert_dividend(combined)
     else:
         saved = None
-    print(f"Saved {new_rows} new dividend rows to {saved if saved else 'no file written'}")
+    logger.info("Saved %d new dividend rows to %s", new_rows, saved if saved else "no file written")
     return combined
 
 def ingest_assets(
@@ -196,8 +199,8 @@ def ingest_assets(
                 storage.save_asset(info)
                 added_symbols.append(symbol)
             else:
-                print(f"No asset info found for {symbol}")
-    print(f"Saved asset info for {len(added_symbols)} new symbols: {', '.join(added_symbols)}")
+                logger.warning("No asset info found for %s", symbol)
+    logger.info("Saved asset info for %d new symbols: %s", len(added_symbols), ', '.join(added_symbols))
 
 def run_ingestion(
     symbols: List[str],
@@ -234,7 +237,7 @@ def main():
 
     storage = _build_storage()
 
-    print(f"Mode: {args.mode} | Symbols: {len(symbols)} | Backend: {os.environ.get('STORAGE_BACKEND', 'csv')}")
+    logger.info("Mode: %s | Symbols: %d | Backend: %s", args.mode, len(symbols), os.environ.get('STORAGE_BACKEND', 'csv'))
     run_ingestion(
         symbols=symbols,
         storage=storage,
