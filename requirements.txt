@@ -4,3 +4,4 @@ duckdb
 fastmcp
 groq
 python-dotenv
+pyyaml
