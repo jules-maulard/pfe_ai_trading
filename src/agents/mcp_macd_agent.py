@@ -4,9 +4,25 @@ import asyncio
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+_SRC = str(Path(__file__).resolve().parent.parent)
+if _SRC not in sys.path:
+    sys.path.insert(0, _SRC)
 
-from base_agent import run_agent
+# Ensure both project root and src directory are on sys.path so
+# imports using `src.*` and bare `utils.*` both work when running
+# this script directly.
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+SRC_DIR = PROJECT_ROOT / "src"
+_ROOT = str(PROJECT_ROOT)
+_SRC_DIR = str(SRC_DIR)
+if _ROOT not in sys.path:
+    sys.path.insert(0, _ROOT)
+if _SRC_DIR not in sys.path:
+    sys.path.insert(0, _SRC_DIR)
+
+from src.agents.entities import Configuration
+from src.agents.agent import Agent
+from src.agents.cli_interface import CliInterface
 
 MCP_SERVER_SCRIPT = "src/mcp_servers/mcp_macd_server.py"
 
@@ -43,5 +59,19 @@ After computing the MACD, analyse the returned data looking for:
 """
 
 
+async def main() -> None:
+    configuration = Configuration.from_env(
+        mcp_server_scripts=[MCP_SERVER_SCRIPT],
+        system_prompt=BASE_SYSTEM_PROMPT,
+    )
+    agent = Agent(configuration)
+    try:
+        await agent.connect()
+        cli = CliInterface(agent, agent_name="MACD MCP Agent")
+        await cli.run()
+    finally:
+        await agent.disconnect()
+
+
 if __name__ == "__main__":
-    asyncio.run(run_agent("MACD MCP Agent", MCP_SERVER_SCRIPT, BASE_SYSTEM_PROMPT))
+    asyncio.run(main())
