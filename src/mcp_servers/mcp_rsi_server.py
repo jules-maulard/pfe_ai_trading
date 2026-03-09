@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -14,6 +15,13 @@ from services.rsi_service import RSIService
 
 mcp = FastMCP("RSI Tools")
 rsi_service = RSIService()
+
+_DEFAULT_LOOKBACK_DAYS = 60 
+
+
+def _default_start() -> str:
+    """Return an ISO date string (used when no start is provided)."""
+    return (datetime.now() - timedelta(days=_DEFAULT_LOOKBACK_DAYS)).strftime("%Y-%m-%d")
 
 _RSI_RESOURCES_DIR = Path(__file__).resolve().parent.parent.parent / "database" / "ressources" / "rsi"
 
@@ -40,7 +48,7 @@ def compute_rsi(
 ) -> Dict[str, Any]:
     return rsi_service.compute(
         window=window, price_col=price_col,
-        symbols=symbols, start=start, end=end,
+        symbols=symbols, start=start or _default_start(), end=end,
         sample_rows=sample_rows,
     )
 
@@ -65,7 +73,7 @@ def detect_extremes(
     return rsi_service.detect_extremes(
         window=window, price_col=price_col,
         overbought=overbought, oversold=oversold,
-        symbols=symbols, start=start, end=end,
+        symbols=symbols, start=start or _default_start(), end=end,
         sample_rows=sample_rows,
     )
 
@@ -90,7 +98,7 @@ def find_divergences(
     return rsi_service.find_divergences(
         window=window, price_col=price_col,
         pivot_lookback=pivot_lookback,
-        symbols=symbols, start=start, end=end,
+        symbols=symbols, start=start or _default_start(), end=end,
         sample_rows=sample_rows,
     )
 
@@ -115,7 +123,7 @@ def analyze_multi_timeframe_rsi(
     return rsi_service.analyze_multi_timeframe_rsi(
         window=window, price_col=price_col,
         timeframes=timeframes,
-        symbols=symbols, start=start, end=end,
+        symbols=symbols, start=start or _default_start(), end=end,
     )
 
 
@@ -142,7 +150,7 @@ def detect_failure_swings(
         window=window, price_col=price_col,
         overbought=overbought, oversold=oversold,
         pivot_lookback=pivot_lookback,
-        symbols=symbols, start=start, end=end,
+        symbols=symbols, start=start or _default_start(), end=end,
         sample_rows=sample_rows,
     )
 
@@ -214,11 +222,11 @@ def full_rsi_analysis_prompt(symbol: str) -> str:
     name="overbought_oversold_scan",
     description="Workflow to screen symbols for overbought or oversold conditions.",
 )
-def overbought_oversold_scan_prompt(threshold_ob: str = "70", threshold_os: str = "30") -> str:
+def overbought_oversold_scan_prompt(symbol: str) -> str:
     return (
         f"Screen all available CAC 40 symbols for overbought/oversold conditions "
-        f"using thresholds OB={threshold_ob} / OS={threshold_os}.\n"
-        "1. Call `detect_extremes` with a high sample_rows (e.g. 50) to capture recent events.\n"
+        f"using defaults thresholds (OB=70 / OS=30).\n"
+        f"1. Call `detect_extremes` with symbols=['{symbol}'] and a high sample_rows (e.g. 50) to capture recent events.\n"
         "2. Read the resource `rsi://knowledge/extremes-and-regimes` to understand regime-adjusted thresholds.\n"
         "3. Group results by symbol and zone (overbought / oversold).\n"
         "4. Rank symbols by how extreme their latest RSI reading is.\n"
