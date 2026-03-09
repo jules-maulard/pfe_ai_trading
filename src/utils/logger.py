@@ -14,7 +14,7 @@ def get_logger(name: str):
 
         # Handler Console
         console_handler = logging.StreamHandler(sys.stderr) # stderr for MCP
-        console_handler.setLevel(logging.INFO)
+        console_handler.setLevel(logging.DEBUG) # INFO
         console_handler.setFormatter(formatter)
         logger.addHandler(console_handler)
 

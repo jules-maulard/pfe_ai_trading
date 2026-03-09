@@ -57,6 +57,14 @@ class CliInterface:
             print("Conversation reset.")
             return
 
+        if lower == "/memory":
+            self._print_memory()
+            return
+
+        if lower == "/tokens":
+            self._print_token_stats()
+            return
+
         if lower == "/tools":
             self._list_tools()
             return
@@ -74,6 +82,18 @@ class CliInterface:
             return
 
         print(f"Unknown command: {command}")
+
+    def _print_token_stats(self) -> None:
+        stats = self._agent.token_monitor.stats()
+        messages = self._agent._memory.get_history()
+        print("\n--- Token Usage ---")
+        print(f"  Messages in context : {len(messages)}")
+        print(f"  LLM calls           : {stats['llm_calls']}")
+        print(f"  Last context size   : {stats['last_context_tokens']:,} tokens")
+        print(f"  Total prompt tokens : {stats['total_prompt_tokens']:,}")
+        print(f"  Total output tokens : {stats['total_completion_tokens']:,}")
+        print(f"  Total tokens used   : {stats['total_tokens']:,}")
+        print("-------------------\n")
 
     def _list_tools(self) -> None:
         tools = self._agent.tools
@@ -107,6 +127,18 @@ class CliInterface:
             if desc:
                 print(f"    {desc[:100]}")
 
+    def _print_memory(self) -> None:
+        messages = self._agent._memory.get_history()
+        if not messages:
+            print("Conversation memory is empty.")
+            return
+        print("\n--- Conversation Memory ---")
+        for i, msg in enumerate(messages, 1):
+            role = msg.get("role", "")
+            content = msg.get("content", "")
+            print(f"{i}. {role}: {content}")
+        print("----------------------------\n")
+
     async def _execute_prompt(self, command: str) -> None:
         parts = command.split(None, 2)
         if len(parts) < 2:
@@ -137,6 +169,7 @@ class CliInterface:
         print("=" * 60)
         print("Commands:")
         print("  /reset      — Reset conversation")
+        print("  /tokens     — Show token usage statistics")
         print("  /tools      — List available tools")
         print("  /resources  — List available resources")
         print("  /prompts    — List available prompt workflows")

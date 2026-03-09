@@ -17,6 +17,7 @@ from src.agents.entities import Configuration, Message, Tool
 from src.agents.llm_client import LlmClient
 from src.agents.memory import Memory
 from src.agents.server import Server
+from src.agents.token_monitor import TokenMonitor
 
 
 class Agent:
@@ -40,10 +41,15 @@ class Agent:
         self._tools_cache: List[Tool] = []
         self._tool_server_map: Dict[str, Server] = {}
         self._memory = Memory()
+        self._token_monitor = TokenMonitor()
 
     @property
     def tools(self) -> List[Tool]:
         return list(self._tools_cache)
+
+    @property
+    def token_monitor(self) -> TokenMonitor:
+        return self._token_monitor
 
     @property
     def prompts(self) -> list:
@@ -118,10 +124,12 @@ class Agent:
         self._memory.add_message(Message(role="user", content=user_input))
 
         while True:
-            choice = await self._llm_client.get_response(
+            choice, usage = await self._llm_client.get_response(
                 messages=self._memory.get_history(),
                 tools=self._openai_tools(),
             )
+            if usage:
+                self._token_monitor.record(usage.prompt_tokens, usage.completion_tokens)
             assistant_message = choice.message
             raw = assistant_message.model_dump()
 
@@ -176,4 +184,5 @@ class Agent:
     async def reset_conversation(self) -> None:
         system_prompt = self._build_system_prompt()
         self._memory.reset(system_prompt)
+        self._token_monitor.reset()
         logger.info("Conversation reset")

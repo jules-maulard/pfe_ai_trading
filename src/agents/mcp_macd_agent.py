@@ -20,8 +20,6 @@ if _ROOT not in sys.path:
 if _SRC_DIR not in sys.path:
     sys.path.insert(0, _SRC_DIR)
 
-from __future__ import annotations
-
 from pathlib import Path
 import asyncio
 import sys

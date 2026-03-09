@@ -41,7 +41,7 @@ class LlmClient:
                     tools=tools,
                     tool_choice="auto" if tools else None,
                 )
-                return response.choices[0]
+                return response.choices[0], response.usage
             except Exception as exc:
                 last_exception = exc
                 logger.warning("LLM request failed (attempt %d/%d): %s", attempt, self._max_retries, exc)
