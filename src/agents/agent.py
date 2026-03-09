@@ -106,9 +106,10 @@ class Agent:
 
     def _build_system_prompt(self) -> str:
         system_prompt = self._configuration.system_prompt
+
         all_resources = self.resources
         if all_resources:
-            system_prompt += "\n\nAvailable knowledge resources (use the read_resource tool to read one):\n"
+            system_prompt += "\n\n# Available knowledge resources\nUse the read_resource tool to read one.\n"
             for resource in all_resources:
                 uri = getattr(resource, "uri", "")
                 desc = getattr(resource, "description", "") or ""
@@ -123,6 +124,7 @@ class Agent:
     async def chat(self, user_input: str) -> str:
         self._memory.add_message(Message(role="user", content=user_input))
 
+        _nudge_sent = False
         while True:
             choice, usage = await self._llm_client.get_response(
                 messages=self._memory.get_history(),
@@ -140,7 +142,19 @@ class Agent:
             ))
 
             if not assistant_message.tool_calls:
-                return assistant_message.content or ""
+                content = assistant_message.content or ""
+                if not content.strip() and not _nudge_sent:
+                    logger.warning("LLM returned empty content — nudging for synthesis")
+                    self._memory.add_message(Message(
+                        role="user",
+                        content=(
+                            "Please now write your complete analysis and recommendation "
+                            "based on all the data you have gathered above."
+                        ),
+                    ))
+                    _nudge_sent = True
+                    continue
+                return content
 
             for tool_call in assistant_message.tool_calls:
                 tool_result = await self._execute_tool_call(tool_call)
