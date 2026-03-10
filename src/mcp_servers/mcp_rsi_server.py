@@ -34,6 +34,37 @@ def health_check() -> Dict[str, Any]:
     return {"status": "ok"}
 
 
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+_OHLCV_PATH   = _PROJECT_ROOT / "database" / "csv" / "ohlcv.csv"
+_ASSET_PATH   = _PROJECT_ROOT / "database" / "csv" / "asset.csv"
+
+
+@mcp.tool(
+    name="list_symbols",
+    description=(
+        "Return all ticker symbols available in the local OHLCV database, "
+        "together with their company names. "
+        "ALWAYS call this tool first when the user mentions a company by name "
+        "(e.g. 'orange', 'airbus', 'air france') to resolve the exact ticker, "
+        "and when asked to compare or rank all symbols in the universe."
+    ),
+)
+def list_symbols() -> Dict[str, Any]:
+    import pandas as pd
+    available = set(pd.read_csv(_OHLCV_PATH, usecols=["symbol"])["symbol"].unique())
+    names: Dict[str, str] = {}
+    try:
+        assets = pd.read_csv(_ASSET_PATH, usecols=["symbol", "company_name"])
+        for _, row in assets.iterrows():
+            sym = str(row["symbol"])
+            if sym in available:
+                names[sym] = str(row["company_name"]) if pd.notna(row["company_name"]) else sym
+    except Exception:
+        pass
+    universe = [{"symbol": s, "company_name": names.get(s, s)} for s in sorted(available)]
+    return {"count": len(universe), "symbols": universe}
+
+
 @mcp.tool(
     name="compute_rsi",
     description="Compute Wilder's RSI for symbols from local OHLCV data.",

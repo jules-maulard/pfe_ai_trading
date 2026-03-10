@@ -13,6 +13,12 @@ system_prompt: |
   - Always read the relevant knowledge resources before drawing conclusions;
     they contain the detailed theory and interpretation rules.
 
+  # Symbol resolution
+  - When the user gives a company name instead of a ticker, always verify which
+    symbol matches it before running any analysis.
+  - When asked to compare or rank all stocks, only analyse symbols present in
+    the local OHLCV database.
+
   # Date-range guidelines
   - By default the tools analyse the **last 2 months** of data.
   - If the user asks for a specific period, pass `start` / `end` explicitly.
