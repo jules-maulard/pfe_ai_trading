@@ -154,9 +154,6 @@ avgs AS (
 SELECT
   symbol,
   date,
-  close,
-  avg_gain,
-  avg_loss,
   CASE
     WHEN avg_gain IS NULL OR avg_loss IS NULL THEN NULL
     WHEN avg_loss = 0 THEN 100.0
@@ -164,3 +161,81 @@ SELECT
   END AS rsi_14
 FROM avgs
 ORDER BY symbol, date;
+
+
+CREATE OR REPLACE VIEW PFE_TRADING.PUBLIC.MACD_12_26_9 AS
+WITH base AS (
+  SELECT
+    symbol,
+    date,
+    close,
+    ROW_NUMBER() OVER (PARTITION BY symbol ORDER BY date) AS rn
+  FROM PFE_TRADING.PUBLIC.OHLCV
+),
+sma AS (
+  SELECT
+    symbol,
+    date,
+    close,
+    rn,
+    CASE WHEN rn >= 12 THEN AVG(close) OVER (PARTITION BY symbol ORDER BY date ROWS BETWEEN 11 PRECEDING AND CURRENT ROW) END AS init_ema12,
+    CASE WHEN rn >= 26 THEN AVG(close) OVER (PARTITION BY symbol ORDER BY date ROWS BETWEEN 25 PRECEDING AND CURRENT ROW) END AS init_ema26
+  FROM base
+),
+ema12 AS (
+  SELECT symbol, rn, date, close, init_ema12 AS ema12
+  FROM sma
+  WHERE rn = 12
+  UNION ALL
+  SELECT s.symbol, s.rn, s.date, s.close,
+    ( (2.0 / (12.0 + 1.0)) * s.close + (1.0 - 2.0 / (12.0 + 1.0)) * e.ema12 )
+  FROM ema12 e
+  JOIN sma s ON s.symbol = e.symbol AND s.rn = e.rn + 1
+),
+ema26 AS (
+  SELECT symbol, rn, date, close, init_ema26 AS ema26
+  FROM sma
+  WHERE rn = 26
+  UNION ALL
+  SELECT s.symbol, s.rn, s.date, s.close,
+    ( (2.0 / (26.0 + 1.0)) * s.close + (1.0 - 2.0 / (26.0 + 1.0)) * e.ema26 )
+  FROM ema26 e
+  JOIN sma s ON s.symbol = e.symbol AND s.rn = e.rn + 1
+),
+macd_prep AS (
+  SELECT
+    e12.symbol,
+    e12.rn,
+    e12.date,
+    e12.close,
+    e12.ema12,
+    e26.ema26,
+    (e12.ema12 - e26.ema26) AS macd
+  FROM ema12 e12
+  JOIN ema26 e26 ON e12.symbol = e26.symbol AND e12.rn = e26.rn
+),
+macd_with_rn AS (
+  SELECT *, ROW_NUMBER() OVER (PARTITION BY symbol ORDER BY date) AS macd_rn
+  FROM macd_prep
+),
+signal_init AS (
+  SELECT symbol, macd_rn, date, macd,
+    CASE WHEN macd_rn >= 9 THEN AVG(macd) OVER (PARTITION BY symbol ORDER BY date ROWS BETWEEN 8 PRECEDING AND CURRENT ROW) END AS init_signal
+  FROM macd_with_rn
+),
+signal AS (
+  SELECT symbol, macd_rn, date, macd, init_signal AS signal
+  FROM signal_init WHERE macd_rn = 9
+  UNION ALL
+  SELECT sig.symbol, m.macd_rn, m.date, m.macd,
+    ( (2.0 / (9.0 + 1.0)) * m.macd + (1.0 - 2.0 / (9.0 + 1.0)) * sig.signal )
+  FROM signal sig
+  JOIN macd_with_rn m ON m.symbol = sig.symbol AND m.macd_rn = sig.macd_rn + 1
+),
+final AS (
+  SELECT m.symbol, m.date, m.close, m.ema12, m.ema26, m.macd, sig.signal AS macd_signal, (m.macd - sig.signal) AS macd_hist
+  FROM macd_with_rn m
+  JOIN signal sig ON m.symbol = sig.symbol AND m.macd_rn = sig.macd_rn
+)
+SELECT symbol, date, macd 
+FROM final ORDER BY symbol, date;
