@@ -28,6 +28,7 @@ class CliInterface:
         while True:
             try:
                 user_input = input("You > ").strip()
+                logger.debug("User input: %s", user_input)
             except (EOFError, KeyboardInterrupt):
                 print("\nGoodbye!")
                 break
@@ -45,6 +46,7 @@ class CliInterface:
 
             try:
                 response = await self._agent.chat(user_input)
+                logger.debug("Agent response: %s", response)
                 print(f"\nAgent > {response}\n")
             except Exception as exc:
                 logger.error("Chat error: %s", exc, exc_info=True)
@@ -55,6 +57,7 @@ class CliInterface:
         if lower == "/reset":
             await self._agent.reset_conversation()
             print("Conversation reset.")
+            logger.debug("Conversation reset by user")
             return
 
         if lower == "/memory":
@@ -86,6 +89,7 @@ class CliInterface:
     def _print_token_stats(self) -> None:
         stats = self._agent.token_monitor.stats()
         messages = self._agent._memory.get_history()
+        logger.info("Token stats requested: %s", stats)
         print("\n--- Token Usage ---")
         print(f"  Messages in context : {len(messages)}")
         print(f"  LLM calls           : {stats['llm_calls']}")
@@ -97,6 +101,7 @@ class CliInterface:
 
     def _list_tools(self) -> None:
         tools = self._agent.tools
+        logger.info("Tools list requested")
         if not tools:
             print("No tools available.")
             return
@@ -105,6 +110,7 @@ class CliInterface:
 
     def _list_resources(self) -> None:
         resources = self._agent.resources
+        logger.info("Resources list requested")
         if not resources:
             print("No resources available.")
             return
@@ -116,6 +122,7 @@ class CliInterface:
 
     def _list_prompts(self) -> None:
         prompts = self._agent.prompts
+        logger.info("Prompts list requested")
         if not prompts:
             print("No prompts available.")
             return
@@ -129,6 +136,7 @@ class CliInterface:
 
     def _print_memory(self) -> None:
         messages = self._agent._memory.get_history()
+        logger.info("Memory requested: %d messages", len(messages))
         if not messages:
             print("Conversation memory is empty.")
             return
@@ -159,11 +167,13 @@ class CliInterface:
                         prompt_args[first_arg] = kv
         try:
             response = await self._agent.run_prompt(prompt_name, prompt_args)
+            logger.debug("Agent response (prompt): %s", response)
             print(f"\nAgent > {response}\n")
         except Exception as exc:
             logger.error("Prompt execution failed: %s", exc, exc_info=True)
 
     def _print_banner(self) -> None:
+        logger.debug("CLI session started")
         print("\n" + "=" * 60)
         print(f"  {self._agent_name} — Technical Analysis Assistant")
         print("=" * 60)

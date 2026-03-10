@@ -80,7 +80,7 @@ class Server:
             logger.info("Disconnected from MCP server %s", self._mcp_server_script)
 
     async def call_tool(self, name: str, arguments: Dict[str, Any]) -> str:
-        logger.debug("Tool call: %s(%s)", name, json.dumps(arguments, ensure_ascii=False))
+        logger.info("Tool call: %s(%s)", name, json.dumps(arguments, ensure_ascii=False))
         last_exception: Exception | None = None
         for attempt in range(1, self._max_retries + 1):
             try:
@@ -94,7 +94,7 @@ class Server:
         return json.dumps({"error": f"Tool {name} failed after {self._max_retries} attempts: {last_exception}"})
 
     async def read_resource(self, uri: str) -> str:
-        logger.debug("Resource read: %s", uri)
+        logger.info("Resource read: %s", uri)
         try:
             result = await self._client.read_resource(uri)
             if isinstance(result, str):
@@ -108,7 +108,7 @@ class Server:
             return json.dumps({"error": str(exc)})
 
     async def get_prompt(self, prompt_name: str, arguments: Dict[str, Any] | None = None) -> str:
-        logger.debug("Prompt invoke: %s(%s)", prompt_name, json.dumps(arguments or {}, ensure_ascii=False))
+        logger.info("Prompt invoke: %s(%s)", prompt_name, json.dumps(arguments or {}, ensure_ascii=False))
         try:
             result = await self._client.get_prompt(prompt_name, arguments or {})
             if hasattr(result, "messages") and result.messages:
