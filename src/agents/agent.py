@@ -63,26 +63,8 @@ class Agent:
         for server in self._servers:
             await server.connect()
 
-        self._tools_cache.clear()
-        self._tool_server_map.clear()
-        for server in self._servers:
-            for tool in server.tools:
-                self._tools_cache.append(tool)
-                self._tool_server_map[tool.name] = server
-
-        all_resources = self.resources
-        if all_resources:
-            self._tools_cache.append(Tool(
-                name="read_resource",
-                description="Read the content of a knowledge resource by its URI.",
-                parameters_schema={
-                    "type": "object",
-                    "properties": {
-                        "uri": {"type": "string", "description": "The resource URI to read."},
-                    },
-                    "required": ["uri"],
-                },
-            ))
+        self._populate_tools_cache()
+        self._register_read_resource_tool()
 
         system_prompt = self._build_system_prompt()
         self._memory.reset(system_prompt)
@@ -98,22 +80,6 @@ class Agent:
         for server in self._servers:
             await server.disconnect()
 
-    def _build_system_prompt(self) -> str:
-        system_prompt = self._configuration.system_prompt
-
-        all_resources = self.resources
-        if all_resources:
-            system_prompt += "\n\n# Available knowledge resources\nUse the read_resource tool to read one.\n"
-            for resource in all_resources:
-                uri = getattr(resource, "uri", "")
-                desc = getattr(resource, "description", "") or ""
-                system_prompt += f"\n- {uri}: {desc}"
-        return system_prompt
-
-    def _openai_tools(self) -> List[Dict[str, Any]] | None:
-        if not self._tools_cache:
-            return None
-        return [tool.to_openai_format() for tool in self._tools_cache]
 
     async def chat(self, user_input: str) -> str:
         self._memory.add_message(Message(role="user", content=user_input))
@@ -158,6 +124,61 @@ class Agent:
                     tool_call_id=tool_call.id,
                 ))
 
+    async def run_prompt(self, prompt_name: str, arguments: Dict[str, Any] | None = None) -> str:
+        for server in self._servers:
+            for prompt in server.prompts:
+                if prompt.name == prompt_name:
+                    prompt_text = await server.get_prompt(prompt_name, arguments)
+                    return await self.chat(prompt_text)
+        return json.dumps({"error": f"Prompt not found: {prompt_name}"})
+
+    async def reset_conversation(self) -> None:
+        system_prompt = self._build_system_prompt()
+        self._memory.reset(system_prompt)
+        self._token_monitor.reset()
+        logger.info("Conversation reset")
+
+    
+    def _populate_tools_cache(self) -> None:
+        self._tools_cache.clear()
+        self._tool_server_map.clear()
+        for server in self._servers:
+            for tool in server.tools:
+                self._tools_cache.append(tool)
+                self._tool_server_map[tool.name] = server
+    
+    def _register_read_resource_tool(self) -> None:
+        if not self.resources:
+            return
+        self._tools_cache.append(Tool(
+            name="read_resource",
+            description="Read the content of a knowledge resource by its URI.",
+            parameters_schema={
+                "type": "object",
+                "properties": {
+                    "uri": {"type": "string", "description": "The resource URI to read."},
+                },
+                "required": ["uri"],
+            },
+        ))
+
+    def _build_system_prompt(self) -> str:
+        system_prompt = self._configuration.system_prompt
+
+        all_resources = self.resources
+        if all_resources:
+            system_prompt += "\n\n# Available knowledge resources\nUse the read_resource tool to read one.\n"
+            for resource in all_resources:
+                uri = getattr(resource, "uri", "")
+                desc = getattr(resource, "description", "") or ""
+                system_prompt += f"\n- {uri}: {desc}"
+        return system_prompt
+
+    def _openai_tools(self) -> List[Dict[str, Any]] | None:
+        if not self._tools_cache:
+            return None
+        return [tool.to_openai_format() for tool in self._tools_cache]
+
     async def _execute_tool_call(self, tool_call) -> str:
         fn_name = tool_call.function.name
         try:
@@ -180,17 +201,4 @@ class Agent:
                 if resource_uri == uri:
                     return await server.read_resource(uri)
         return json.dumps({"error": f"Resource not found: {uri}"})
-
-    async def run_prompt(self, prompt_name: str, arguments: Dict[str, Any] | None = None) -> str:
-        for server in self._servers:
-            for prompt in server.prompts:
-                if prompt.name == prompt_name:
-                    prompt_text = await server.get_prompt(prompt_name, arguments)
-                    return await self.chat(prompt_text)
-        return json.dumps({"error": f"Prompt not found: {prompt_name}"})
-
-    async def reset_conversation(self) -> None:
-        system_prompt = self._build_system_prompt()
-        self._memory.reset(system_prompt)
-        self._token_monitor.reset()
-        logger.info("Conversation reset")
+    
