@@ -21,27 +21,21 @@ from src.agents.token_monitor import TokenMonitor
 
 
 class Agent:
-    def __init__(self, configuration: Configuration) -> None:
+    def __init__(
+        self,
+        configuration: Configuration,
+        llm_client: LlmClient,
+        servers: List[Server],
+        memory: Memory,
+        token_monitor: TokenMonitor,
+    ) -> None:
         self._configuration = configuration
-        self._llm_client = LlmClient(
-            api_key=configuration.api_key,
-            model=configuration.model,
-            max_retries=configuration.max_retries,
-            retry_delay=configuration.retry_delay,
-        )
-        self._servers: List[Server] = [
-            Server(
-                mcp_server_script=script,
-                max_retries=configuration.max_retries,
-                retry_delay=configuration.retry_delay,
-                tool_call_timeout=configuration.tool_call_timeout,
-            )
-            for script in configuration.mcp_server_scripts
-        ]
+        self._llm_client = llm_client
+        self._servers = servers
         self._tools_cache: List[Tool] = []
         self._tool_server_map: Dict[str, Server] = {}
-        self._memory = Memory()
-        self._token_monitor = TokenMonitor()
+        self._memory = memory
+        self._token_monitor = token_monitor
 
     @property
     def tools(self) -> List[Tool]:

@@ -20,6 +20,10 @@ if _SRC_DIR not in sys.path:
 from src.agents.entities import Configuration
 from src.agents.agent import Agent
 from src.agents.cli_interface import CliInterface
+from src.agents.llm_client import LlmClient
+from src.agents.memory import Memory
+from src.agents.server import Server
+from src.agents.token_monitor import TokenMonitor
 
 
 async def run_from_config(config_path: str) -> None:
@@ -34,7 +38,29 @@ async def run_from_config(config_path: str) -> None:
         mcp_server_scripts=mcp_server_scripts,
         system_prompt=system_prompt,
     )
-    agent = Agent(configuration)
+
+    llm_client = LlmClient(
+        api_key=configuration.api_key,
+        model=configuration.model,
+        max_retries=configuration.max_retries,
+        retry_delay=configuration.retry_delay,
+    )
+    servers = [
+        Server(
+            mcp_server_script=script,
+            max_retries=configuration.max_retries,
+            retry_delay=configuration.retry_delay,
+            tool_call_timeout=configuration.tool_call_timeout,
+        )
+        for script in configuration.mcp_server_scripts
+    ]
+    agent = Agent(
+        configuration=configuration,
+        llm_client=llm_client,
+        servers=servers,
+        memory=Memory(),
+        token_monitor=TokenMonitor(),
+    )
     try:
         await agent.connect()
         cli = CliInterface(agent, agent_name=agent_name)
