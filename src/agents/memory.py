@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Dict, List, Any
 
-from src.agents.entities import Message
+from .entities import Message
 
 
 class Memory:

@@ -2,28 +2,16 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import sys
 from pathlib import Path
-
 import yaml
 
-# Ensure project root and src are on sys.path so imports work when running directly
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-SRC_DIR = PROJECT_ROOT / "src"
-_ROOT = str(PROJECT_ROOT)
-_SRC_DIR = str(SRC_DIR)
-if _ROOT not in sys.path:
-    sys.path.insert(0, _ROOT)
-if _SRC_DIR not in sys.path:
-    sys.path.insert(0, _SRC_DIR)
-
-from src.agents.entities import Configuration
-from src.agents.agent import Agent
-from src.agents.cli_interface import CliInterface
-from src.agents.llm_client import LlmClient
-from src.agents.memory import Memory
-from src.agents.server import Server
-from src.agents.token_monitor import TokenMonitor
+from .entities import Configuration
+from .agent import Agent
+from .cli_interface import CliInterface
+from .llm_client import LlmClient
+from .memory import Memory
+from .server import Server
+from .token_monitor import TokenMonitor
 
 
 async def run_from_config(config_path: str) -> None:

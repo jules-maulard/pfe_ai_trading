@@ -4,10 +4,7 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-
 from dotenv import load_dotenv
-
-load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 
 
 @dataclass
@@ -68,6 +65,7 @@ class Configuration:
         system_prompt: str = "",
         model: str = "openai/gpt-oss-20b",
     ) -> Configuration:
+        load_dotenv(Path(__file__).resolve().parents[2] / ".env")
         api_key = os.environ.get("GROQ_API_KEY") or os.environ.get("OPENAI_API_KEY") or ""
         return cls(
             api_key=api_key,
