@@ -2,22 +2,15 @@ from __future__ import annotations
 
 import argparse
 import os
-import sys
 from datetime import datetime, timedelta
-from pathlib import Path
 from typing import List, Optional
+import pandas as pd
 
 from dotenv import load_dotenv
 
-_SRC = str(Path(__file__).resolve().parent.parent.parent)
-if _SRC not in sys.path:
-    sys.path.insert(0, _SRC)
-
-import pandas as pd
-
-from data.retrievers.yfinance_retriever import CAC40_TICKERS, YFinanceRetriever
-from data.storage.base_storage import BaseStorage
-from utils.logger import get_logger
+from .retrievers import CAC40_TICKERS, YFinanceRetriever
+from .storage import BaseStorage
+from ..utils import get_logger
 
 logger = get_logger(__name__)
 
@@ -27,13 +20,13 @@ def _build_storage() -> BaseStorage:
     backend = os.environ.get("STORAGE_BACKEND", "none").lower()
 
     if backend == "csv":
-        from data.storage.csv_storage import CsvStorage
+        from .storage import CsvStorage
         return CsvStorage()
     elif backend == "parquet":
-        from data.storage.parquet_storage import ParquetStorage
+        from .storage import ParquetStorage
         return ParquetStorage()
     elif backend == "snowflake":
-        from data.storage.snowflake_storage import SnowflakeStorage
+        from .storage import SnowflakeStorage
         return SnowflakeStorage()
     else:
         raise ValueError(f"Unknown STORAGE_BACKEND: {backend}")

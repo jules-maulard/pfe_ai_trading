@@ -1,17 +1,11 @@
 from __future__ import annotations
 
-import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from fastmcp import FastMCP
 
-from fastmcp import Context, FastMCP
-
-_SRC = str(Path(__file__).resolve().parent.parent)
-if _SRC not in sys.path:
-    sys.path.insert(0, _SRC)
-
-from services.rsi_service import RSIService
+from .rsi_service import RSIService
 
 mcp = FastMCP("RSI Tools")
 rsi_service = RSIService()

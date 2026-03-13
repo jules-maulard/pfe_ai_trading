@@ -1,16 +1,10 @@
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-
 from fastmcp import FastMCP
 
-_SRC = str(Path(__file__).resolve().parent.parent)
-if _SRC not in sys.path:
-    sys.path.insert(0, _SRC)
-
-from services.macd_service import MACDService
+from .macd_service import MACDService
 
 mcp = FastMCP("MACD Tools")
 macd_service = MACDService()

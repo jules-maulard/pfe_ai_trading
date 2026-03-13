@@ -1,18 +1,11 @@
 from __future__ import annotations
 
 import os
-import sys
-from pathlib import Path
 from typing import List, Optional
-
 import pandas as pd
 
-_SRC = str(Path(__file__).resolve().parent.parent.parent)
-if _SRC not in sys.path:
-    sys.path.insert(0, _SRC)
-
-from data.storage.base_storage import BaseStorage
-from utils.logger import get_logger
+from .base_storage import BaseStorage
+from ...utils import get_logger
 
 logger = get_logger(__name__)
 

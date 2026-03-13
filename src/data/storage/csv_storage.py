@@ -2,12 +2,11 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import List, Optional
-
 import duckdb
 import pandas as pd
 
-from data.storage.base_storage import BaseStorage
-from utils.logger import get_logger
+from .base_storage import BaseStorage
+from ...utils import get_logger
 
 logger = get_logger(__name__)
 

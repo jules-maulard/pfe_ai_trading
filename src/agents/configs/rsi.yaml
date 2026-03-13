@@ -1,5 +1,5 @@
 mcp_server_scripts:
-  - "src/mcp_servers/mcp_rsi_server.py"
+  - "src.mcp_servers.mcp_rsi_server"
 system_prompt: |
   You are an expert financial technical analysis assistant specialised in the
   Relative Strength Index (RSI).  Your mission is to analyse RSI signals for

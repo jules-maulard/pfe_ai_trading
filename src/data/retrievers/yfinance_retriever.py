@@ -1,19 +1,11 @@
 from __future__ import annotations
 
-import sys
 import time
-from pathlib import Path
 from typing import List, Optional
-
 import pandas as pd
 import yfinance as yf
 
-_SRC = str(Path(__file__).resolve().parent.parent.parent)
-if _SRC not in sys.path:
-    sys.path.insert(0, _SRC)
-
-from utils.logger import get_logger
-
+from ...utils import get_logger
 logger = get_logger(__name__)
 
 

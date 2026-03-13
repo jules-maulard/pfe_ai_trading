@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import asyncio
 import json
+import sys
 from typing import Any, Dict, List
+from pathlib import Path
 from fastmcp import Client
 
 from ..utils import get_logger
@@ -42,7 +44,27 @@ class Server:
         return any(t.name == name for t in self._tools)
 
     async def connect(self) -> None:
-        self._client = Client(self._mcp_server_script)
+        transport = self._mcp_server_script
+
+        # If the transport looks like a module path (e.g. "src.mcp_servers.mcp_rsi_server")
+        # but is not an existing file path, convert it into an MCP stdio config that
+        # runs `python -m <module>` so the server is started with package semantics.
+        if isinstance(transport, str) and not Path(transport).exists() and "." in transport:
+            project_root = Path(__file__).resolve().parents[2]
+            cfg = {
+                "mcpServers": {
+                    "server": {
+                        "command": sys.executable,
+                        "args": ["-m", transport],
+                        "cwd": str(project_root),
+                        "transport": "stdio",
+                    }
+                }
+            }
+            self._client = Client(cfg)
+        else:
+            self._client = Client(transport)
+
         await self._client.__aenter__()
 
         raw_tools = await self._client.list_tools()

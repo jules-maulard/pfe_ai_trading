@@ -1,1 +1,2 @@
-from data.retrievers.yfinance_retriever import YFinanceRetriever
+from .yfinance_retriever import YFinanceRetriever
+from .yfinance_retriever import CAC40_TICKERS

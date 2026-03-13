@@ -2,16 +2,10 @@ from __future__ import annotations
 
 import argparse
 import os
-import sys
-from pathlib import Path
 
-_SRC = str(Path(__file__).resolve().parent.parent.parent)
-if _SRC not in sys.path:
-    sys.path.insert(0, _SRC)
-
-from data.retrievers.yfinance_retriever import CAC40_TICKERS
-from data.storage.base_storage import BaseStorage
-from utils.logger import get_logger
+from .retrievers import CAC40_TICKERS
+from .storage import BaseStorage
+from ..utils import get_logger
 
 logger = get_logger(__name__)
 
@@ -60,7 +54,7 @@ def main():
     logger.info("=== FULL PIPELINE === Backend: %s | Mode: %s | Symbols: %d", backend_name, args.mode, len(symbols))
 
     logger.info("--- Step 1: Ingestion ---")
-    from data.pipelines.ingestion_pipeline import run_ingestion
+    from .ingestion_pipeline import run_ingestion
 
     run_ingestion(
         symbols=symbols,
@@ -72,7 +66,7 @@ def main():
     )
 
     logger.info("--- Step 2: Indicators ---")
-    from data.pipelines.indicators_pipeline import run_indicators
+    from .indicators_pipeline import run_indicators
 
     tickers_filter = symbols if args.tickers else None
     run_indicators(
@@ -100,8 +94,8 @@ def run_full(
     macd_slow=26,
     macd_signal=9,
 ):
-    from data.pipelines.ingestion_pipeline import run_ingestion
-    from data.pipelines.indicators_pipeline import run_indicators
+    from .ingestion_pipeline import run_ingestion
+    from .indicators_pipeline import run_indicators
 
     effective_symbols = symbols or CAC40_TICKERS
     storage = _build_storage()
