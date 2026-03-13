@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from typing import Any, Dict, List
 
-from utils.logger import get_logger
+from ..utils import get_logger
 logger = get_logger(__name__)
 
 from .entities import Configuration, Message, Tool

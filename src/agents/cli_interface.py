@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Dict
 
-from utils.logger import get_logger
+from ..utils import get_logger
 logger = get_logger(__name__)
 
 from .agent import Agent
