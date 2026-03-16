@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
 
 from ..utils import get_logger
 logger = get_logger(__name__)
@@ -76,7 +76,6 @@ class Agent:
 
     async def chat(self, user_input: str) -> str:
         self._memory.add_message(Message(role="user", content=user_input))
-
         _nudge_sent = False
         while True:
             choice, usage = await self._llm_client.get_response(
@@ -96,16 +95,8 @@ class Agent:
 
             if not assistant_message.tool_calls:
                 content = assistant_message.content or ""
-                if not content.strip() and not _nudge_sent:
-                    logger.warning("LLM returned empty content — nudging for synthesis")
-                    self._memory.add_message(Message(
-                        role="user",
-                        content=(
-                            "Please now write your complete analysis and recommendation "
-                            "based on all the data you have gathered above."
-                        ),
-                    ))
-                    _nudge_sent = True
+                should_continue, _nudge_sent = self._maybe_nudge_for_synthesis(content, _nudge_sent)
+                if should_continue:
                     continue
                 return content
 
@@ -194,4 +185,21 @@ class Agent:
                 if resource_uri == uri:
                     return await server.read_resource(uri)
         return json.dumps({"error": f"Resource not found: {uri}"})
+
+    def _maybe_nudge_for_synthesis(self, content: str, nudge_sent: bool) -> Tuple[bool, bool]:
+        """If the assistant returned empty content, send a nudge once.
+
+        Returns a tuple `(should_continue_loop, updated_nudge_sent)`.
+        """
+        if not content.strip() and not nudge_sent:
+            logger.warning("LLM returned empty content — nudging for synthesis")
+            self._memory.add_message(Message(
+                role="user",
+                content=(
+                    "Please now write your complete analysis and recommendation "
+                    "based on all the data you have gathered above."
+                ),
+            ))
+            return True, True
+        return False, nudge_sent
     

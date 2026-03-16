@@ -46,9 +46,6 @@ class Server:
     async def connect(self) -> None:
         transport = self._mcp_server_script
 
-        # If the transport looks like a module path (e.g. "src.mcp_servers.mcp_rsi_server")
-        # but is not an existing file path, convert it into an MCP stdio config that
-        # runs `python -m <module>` so the server is started with package semantics.
         if isinstance(transport, str) and not Path(transport).exists() and "." in transport:
             project_root = Path(__file__).resolve().parents[2]
             cfg = {
