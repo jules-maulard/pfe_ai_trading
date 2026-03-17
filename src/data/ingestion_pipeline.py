@@ -17,14 +17,11 @@ logger = get_logger(__name__)
 
 def _build_storage() -> BaseStorage:
     load_dotenv()
-    backend = os.environ.get("STORAGE_BACKEND", "none").lower()
+    backend = os.environ.get("STORAGE_BACKEND", "csv").lower()
 
     if backend == "csv":
         from .storage import CsvStorage
         return CsvStorage()
-    elif backend == "parquet":
-        from .storage import ParquetStorage
-        return ParquetStorage()
     elif backend == "snowflake":
         from .storage import SnowflakeStorage
         return SnowflakeStorage()

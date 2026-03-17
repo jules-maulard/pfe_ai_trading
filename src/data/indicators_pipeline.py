@@ -17,9 +17,6 @@ def _build_storage() -> BaseStorage:
     if backend == "csv":
         from data.storage.csv_storage import CsvStorage
         return CsvStorage()
-    elif backend == "parquet":
-        from data.storage.parquet_storage import ParquetStorage
-        return ParquetStorage()
     elif backend == "snowflake":
         from data.storage.snowflake_storage import SnowflakeStorage
         return SnowflakeStorage()
