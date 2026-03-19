@@ -16,6 +16,7 @@ _TABLE_COLUMNS: dict[str, list[str]] = {
     "ohlcv": ["symbol", "date", "open", "high", "low", "close", "volume"],
     "dividend": ["symbol", "date", "amount"],
     "asset": ["symbol"],
+    "indicators": ["symbol", "date", "rsi", "macd", "macd_signal", "macd_hist"],
 }
 
 
@@ -32,9 +33,8 @@ class CsvStorage(BaseStorage):
     def _path(self, table: str) -> Path:
         return self.base_dir / f"{table}.csv"
 
-    def _save(self, df: pd.DataFrame, table: str, sort_cols: List[str]) -> str:
+    def _save(self, df: pd.DataFrame, table: str) -> str:
         path = self._path(table)
-        logger.debug("Saving %d rows to %s", len(df), path)
         df.to_csv(path, index=False)
         return str(path)
 
@@ -48,8 +48,6 @@ class CsvStorage(BaseStorage):
         path = self._path(table)
         if not path.exists():
             raise FileNotFoundError(f"Data file not found: {path}")
-
-        logger.debug("Loading %s (symbols=%s, start=%s, end=%s)", table, symbols, start, end)
 
         source = f"'{path.as_posix()}'"
         sql = f"SELECT * FROM read_csv_auto({source})"
@@ -67,12 +65,7 @@ class CsvStorage(BaseStorage):
 
         return duckdb.sql(sql).df()
 
-    def _append(self, df: pd.DataFrame, table: str, sort_cols: List[str]) -> str:
-        path = self._path(table)
-        df.to_csv(path, mode="a", header=False, index=False)
-        return str(path)
-
-    def _upsert(self, df: pd.DataFrame, table: str, sort_cols: List[str]) -> str:
+    def _upsert(self, df: pd.DataFrame, table: str) -> str:
         path = self._path(table)
         symbols = list(df["symbol"].unique())
         if path.exists():
@@ -84,16 +77,10 @@ class CsvStorage(BaseStorage):
             combined = pd.concat([others, df], ignore_index=True)
         else:
             combined = df
-        return self._save(combined, table, sort_cols)
+        return self._save(combined, table)
 
     def save_ohlcv(self, df: pd.DataFrame) -> str:
-        return self._upsert(df, "ohlcv", ["symbol", "date"])
-
-    def append_ohlcv(self, df: pd.DataFrame) -> str:
-        return self._append(df, "ohlcv", ["symbol", "date"])
-
-    def upsert_ohlcv(self, df: pd.DataFrame) -> str:
-        return self._upsert(df, "ohlcv", ["symbol", "date"])
+        return self._upsert(df, "ohlcv")
 
     def load_ohlcv(
         self,
@@ -103,20 +90,8 @@ class CsvStorage(BaseStorage):
     ) -> pd.DataFrame:
         return self._load("ohlcv", symbols=symbols, start=start, end=end)
 
-    def save_asset(self, df: pd.DataFrame) -> str:
-        return self._upsert(df, "asset", ["symbol"])
-
-    def load_asset(self, symbols: Optional[List[str]] = None) -> pd.DataFrame:
-        return self._load("asset", symbols=symbols)
-
     def save_dividend(self, df: pd.DataFrame) -> str:
-        return self._upsert(df, "dividend", ["symbol", "date"])
-
-    def append_dividend(self, df: pd.DataFrame) -> str:
-        return self._append(df, "dividend", ["symbol", "date"])
-
-    def upsert_dividend(self, df: pd.DataFrame) -> str:
-        return self._upsert(df, "dividend", ["symbol", "date"])
+        return self._upsert(df, "dividend")
 
     def load_dividend(
         self,
@@ -125,6 +100,23 @@ class CsvStorage(BaseStorage):
         end: Optional[str] = None,
     ) -> pd.DataFrame:
         return self._load("dividend", symbols=symbols, start=start, end=end)
+
+    def save_asset(self, df: pd.DataFrame) -> str:
+        return self._upsert(df, "asset")
+
+    def load_asset(self, symbols: Optional[List[str]] = None) -> pd.DataFrame:
+        return self._load("asset", symbols=symbols)
+
+    def save_indicators(self, df: pd.DataFrame) -> str:
+        return self._upsert(df, "indicators")
+
+    def load_indicators(
+        self,
+        symbols: Optional[List[str]] = None,
+        start: Optional[str] = None,
+        end: Optional[str] = None,
+    ) -> pd.DataFrame:
+        return self._load("indicators", symbols=symbols, start=start, end=end)
 
     def get_last_date(self, table: str, symbol: str) -> Optional[str]:
         path = self._path(table)
@@ -140,3 +132,29 @@ class CsvStorage(BaseStorage):
         if pd.isna(val):
             return None
         return str(val)
+
+    def update_indicators(
+        self,
+        symbols: Optional[List[str]] = None,
+        start: Optional[str] = None,
+        end: Optional[str] = None,
+    ) -> str:
+        from ...mcp_servers.rsi_service import RSIService
+        from ...mcp_servers.macd_service import MACDService
+
+        ohlcv = self.load_ohlcv(symbols=symbols, start=start, end=end)
+        if ohlcv.empty:
+            logger.warning("No OHLCV data found for indicator computation.")
+            return ""
+
+        rsi_df = RSIService.compute_rsi_wilder(ohlcv)
+        macd_df = MACDService.compute_macd(rsi_df)
+
+        indicators = macd_df[["symbol", "date", "rsi14", "macd", "macd_signal", "macd_hist"]].copy()
+        indicators = indicators.rename(columns={"rsi14": "rsi"})
+        indicators = indicators.dropna(subset=["rsi", "macd", "macd_signal", "macd_hist"])
+        indicators = indicators.sort_values(["symbol", "date"]).reset_index(drop=True)
+
+        saved = self.save_indicators(indicators)
+        logger.info("Computed and saved %d indicator rows to %s", len(indicators), saved)
+        return saved

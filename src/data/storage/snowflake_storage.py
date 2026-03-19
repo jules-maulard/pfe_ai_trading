@@ -12,6 +12,9 @@ logger = get_logger(__name__)
 SNOWFLAKE_OHLCV_TABLE = "ohlcv"
 SNOWFLAKE_ASSET_TABLE = "asset"
 SNOWFLAKE_DIVIDEND_TABLE = "dividend"
+SNOWFLAKE_INDICATORS_TABLE = "indicators"
+
+SNOWFLAKE_INDICATORS_TASK = "TASK_COMPUTE_INDICATORS"
 
 
 class SnowflakeStorage(BaseStorage):
@@ -51,7 +54,6 @@ class SnowflakeStorage(BaseStorage):
         self.warehouse = warehouse or os.environ.get("SNOWFLAKE_WAREHOUSE", "COMPUTE_WH")
 
     def _connect(self):
-        logger.debug("Connecting to Snowflake: %s.%s", self.database, self.schema)
         return self._sf.connect(
             account=self.account,
             user=self.user,
@@ -62,7 +64,6 @@ class SnowflakeStorage(BaseStorage):
         )
 
     def _write(self, df: pd.DataFrame, table: str) -> str:
-        logger.debug("Writing %d rows to %s", len(df), table.upper())
         conn = self._connect()
         try:
             if "date" in df.columns:
@@ -80,7 +81,6 @@ class SnowflakeStorage(BaseStorage):
         start: Optional[str] = None,
         end: Optional[str] = None,
     ) -> pd.DataFrame:
-        logger.debug("Reading %s (symbols=%s, start=%s, end=%s)", table.upper(), symbols, start, end)
         sql = f"SELECT * FROM {table.upper()}"
         conditions = []
         if symbols:
@@ -105,7 +105,6 @@ class SnowflakeStorage(BaseStorage):
 
     def _upsert(self, df: pd.DataFrame, table: str) -> str:
         symbols = list(df["symbol"].unique())
-        logger.debug("Upserting %d rows for %d symbol(s) into %s", len(df), len(symbols), table.upper())
         syms_sql = ", ".join(f"'{s}'" for s in symbols)
         conn = self._connect()
         try:
@@ -118,12 +117,6 @@ class SnowflakeStorage(BaseStorage):
     def save_ohlcv(self, df: pd.DataFrame) -> str:
         return self._upsert(df, SNOWFLAKE_OHLCV_TABLE)
 
-    def append_ohlcv(self, df: pd.DataFrame) -> str:
-        return self._write(df, SNOWFLAKE_OHLCV_TABLE)
-
-    def upsert_ohlcv(self, df: pd.DataFrame) -> str:
-        return self._upsert(df, SNOWFLAKE_OHLCV_TABLE)
-
     def load_ohlcv(
         self,
         symbols: Optional[List[str]] = None,
@@ -132,19 +125,7 @@ class SnowflakeStorage(BaseStorage):
     ) -> pd.DataFrame:
         return self._read(SNOWFLAKE_OHLCV_TABLE, symbols=symbols, start=start, end=end)
 
-    def save_asset(self, df: pd.DataFrame) -> str:
-        return self._upsert(df, SNOWFLAKE_ASSET_TABLE)
-
-    def load_asset(self, symbols: Optional[List[str]] = None) -> pd.DataFrame:
-        return self._read(SNOWFLAKE_ASSET_TABLE, symbols=symbols)
-
     def save_dividend(self, df: pd.DataFrame) -> str:
-        return self._upsert(df, SNOWFLAKE_DIVIDEND_TABLE)
-
-    def append_dividend(self, df: pd.DataFrame) -> str:
-        return self._write(df, SNOWFLAKE_DIVIDEND_TABLE)
-
-    def upsert_dividend(self, df: pd.DataFrame) -> str:
         return self._upsert(df, SNOWFLAKE_DIVIDEND_TABLE)
 
     def load_dividend(
@@ -154,6 +135,23 @@ class SnowflakeStorage(BaseStorage):
         end: Optional[str] = None,
     ) -> pd.DataFrame:
         return self._read(SNOWFLAKE_DIVIDEND_TABLE, symbols=symbols, start=start, end=end)
+
+    def save_asset(self, df: pd.DataFrame) -> str:
+        return self._upsert(df, SNOWFLAKE_ASSET_TABLE)
+
+    def load_asset(self, symbols: Optional[List[str]] = None) -> pd.DataFrame:
+        return self._read(SNOWFLAKE_ASSET_TABLE, symbols=symbols)
+
+    def save_indicators(self, df: pd.DataFrame) -> str:
+        return self._upsert(df, SNOWFLAKE_INDICATORS_TABLE)
+
+    def load_indicators(
+        self,
+        symbols: Optional[List[str]] = None,
+        start: Optional[str] = None,
+        end: Optional[str] = None,
+    ) -> pd.DataFrame:
+        return self._read(SNOWFLAKE_INDICATORS_TABLE, symbols=symbols, start=start, end=end)
 
     def get_last_date(self, table: str, symbol: str) -> Optional[str]:
         sql = (
@@ -170,3 +168,18 @@ class SnowflakeStorage(BaseStorage):
             return str(row[0])
         finally:
             conn.close()
+
+    def update_indicators(
+        self,
+        symbols: Optional[List[str]] = None,
+        start: Optional[str] = None,
+        end: Optional[str] = None,
+    ) -> str:
+        conn = self._connect()
+        try:
+            cursor = conn.cursor()
+            cursor.execute(f"EXECUTE TASK {SNOWFLAKE_INDICATORS_TASK}")
+            logger.info("Launched Snowflake task %s", SNOWFLAKE_INDICATORS_TASK)
+        finally:
+            conn.close()
+        return SNOWFLAKE_INDICATORS_TASK

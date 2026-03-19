@@ -21,14 +21,6 @@ class BaseStorage(ABC):
         ...
 
     @abstractmethod
-    def save_asset(self, df: pd.DataFrame) -> str:
-        ...
-
-    @abstractmethod
-    def load_asset(self, symbols: Optional[List[str]] = None) -> pd.DataFrame:
-        ...
-
-    @abstractmethod
     def save_dividend(self, df: pd.DataFrame) -> str:
         ...
 
@@ -42,21 +34,36 @@ class BaseStorage(ABC):
         ...
 
     @abstractmethod
-    def append_ohlcv(self, df: pd.DataFrame) -> str:
+    def save_asset(self, df: pd.DataFrame) -> str:
         ...
 
     @abstractmethod
-    def upsert_ohlcv(self, df: pd.DataFrame) -> str:
+    def load_asset(self, symbols: Optional[List[str]] = None) -> pd.DataFrame:
         ...
 
     @abstractmethod
-    def append_dividend(self, df: pd.DataFrame) -> str:
+    def save_indicators(self, df: pd.DataFrame) -> str:
+    # def save_indicators(self, indicator: str, df: pd.DataFrame) -> str:
         ...
 
     @abstractmethod
-    def upsert_dividend(self, df: pd.DataFrame) -> str:
+    def load_indicators(
+        self,
+        symbols: Optional[List[str]] = None,
+        start: Optional[str] = None,
+        end: Optional[str] = None,
+    ) -> pd.DataFrame:
         ...
 
     @abstractmethod
     def get_last_date(self, table: str, symbol: str) -> Optional[str]:
+        ...
+
+    @abstractmethod
+    def update_indicators(
+        self,
+        symbols: Optional[List[str]] = None,
+        start: Optional[str] = None,
+        end: Optional[str] = None,
+    ) -> str:
         ...
