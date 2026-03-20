@@ -5,3 +5,5 @@ groq
 python-dotenv
 pyyaml
 concurrent-log-handler
+pydantic>=2.0
+pydantic-settings>=2.0

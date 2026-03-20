@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 from typing import List, Optional
 import pandas as pd
 
@@ -37,21 +36,18 @@ class SnowflakeStorage(BaseStorage):
                 "Install it with: pip install snowflake-connector-python"
             ) from exc
 
-        try:
-            from dotenv import load_dotenv
-            load_dotenv()
-        except ImportError:
-            pass
+        from ..config.settings import get_config
+        cfg = get_config()
 
         self._sf = snowflake.connector
         self._write_pandas = write_pandas
 
-        self.account = account or os.environ["SNOWFLAKE_ACCOUNT"]
-        self.user = user or os.environ["SNOWFLAKE_USER"]
-        self.password = password or os.environ["SNOWFLAKE_PASSWORD"]
-        self.database = database or os.environ.get("SNOWFLAKE_DATABASE", "PFE_TRADING")
-        self.schema = schema or os.environ.get("SNOWFLAKE_SCHEMA", "PUBLIC")
-        self.warehouse = warehouse or os.environ.get("SNOWFLAKE_WAREHOUSE", "COMPUTE_WH")
+        self.account = account or cfg.snowflake_account
+        self.user = user or cfg.snowflake_user
+        self.password = password or cfg.snowflake_password
+        self.database = database or cfg.snowflake_database
+        self.schema = schema or cfg.snowflake_schema
+        self.warehouse = warehouse or cfg.snowflake_warehouse
 
     def _connect(self):
         return self._sf.connect(
