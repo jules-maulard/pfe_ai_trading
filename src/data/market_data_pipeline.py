@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import argparse
 import os
 from typing import List
-
 from dotenv import load_dotenv
+import yaml
 
 from .retrievers import CAC40_TICKERS, YFinanceRetriever
 from .storage import BaseStorage
@@ -37,9 +38,33 @@ def _build_storage() -> BaseStorage:
             return SnowflakeStorage()
         raise ValueError(f"Unknown STORAGE_BACKEND: {backend}")
 
+def load_yaml_config(path: str) -> dict:
+    with open(path) as f:
+        return yaml.safe_load(f)
+
+def load_cli_config() -> dict:
+    p = argparse.ArgumentParser()
+    p.add_argument('--config', default='retriever.yaml', help='Path to YAML config file')
+    p.add_argument('--backend', default=None, help='Override storage backend (e.g. csv, snowflake)')
+    p.add_argument('--symbols', nargs='+', default=None, help='Override list of symbols to fetch')
+    args = p.parse_args()
+    return vars(args)
+
+def get_params() -> dict:
+    cli_config = load_cli_config()
+    yaml_cfg = load_yaml_config(cli_config['config'])
+
+    # merge precedence: CLI > ENV > config
+    backend = cli_config['backend'] or os.getenv('STORAGE_BACKEND') or yaml_cfg.get('storage')
+    symbols = cli_config['symbols'] or yaml_cfg.get('symbols') or CAC40_TICKERS
+    start = yaml_cfg.get('start_date')
+
+    return dict(backend=backend, symbols=symbols, start=start) 
+
 def main():
+    params = get_params()
     storage = _build_storage()
-    run_pipeline(symbols=CAC40_TICKERS, storage=storage)
+    run_pipeline(symbols=params['symbols'], storage=storage)
 
 
 if __name__ == "__main__":

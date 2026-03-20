@@ -1,0 +1,8 @@
+symbols:
+  - ACA.PA
+  - AIR.PA
+  - BNP.PA
+  - EN.PA
+  - OR.PA
+start_date: "2016-01-01"
+storage: "snowflake"
