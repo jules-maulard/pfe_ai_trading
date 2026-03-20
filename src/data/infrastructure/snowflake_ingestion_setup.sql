@@ -1,17 +1,10 @@
--- Create  file format and stage for data loading
-CREATE FILE FORMAT IF NOT EXISTS TRADING_AI.MARKET_DATA.CSV_FORMAT
-    TYPE = 'CSV'
-    FIELD_DELIMITER = ','
-    SKIP_HEADER = 1
-    NULL_IF = ('NULL', 'null', 'None', '')
-    EMPTY_FIELD_AS_NULL = TRUE
-    DATE_FORMAT = 'AUTO'
-    TIMESTAMP_FORMAT = 'AUTO'
-    COMMENT = 'CSV format';
+-- Create file formats and stage for data loading
+CREATE FILE FORMAT IF NOT EXISTS TRADING_AI.MARKET_DATA.PARQUET_FORMAT
+    TYPE = 'PARQUET'
+    COMMENT = 'Parquet format for staged uploads';
 
-CREATE STAGE IF NOT EXISTS TRADING_AI.MARKET_DATA.TRADING_STAGE 
-FILE_FORMAT = TRADING_AI.MARKET_DATA.CSV_FORMAT 
-COMMENT = 'Internal stage';
+CREATE STAGE IF NOT EXISTS TRADING_AI.MARKET_DATA.TRADING_STAGE
+    COMMENT = 'Internal stage for parquet uploads';
 
 
 -- Create task for nightly data processing
@@ -22,7 +15,6 @@ USE SCHEMA TRADING_AI.MARKET_DATA;
 
 CREATE TASK IF NOT EXISTS TASK_COMPUTE_INDICATORS
     WAREHOUSE = COMPUTE_WH
-    SCHEDULE = 'USING CRON 0 1 * * * UTC'
-    COMMENT = 'Nightly recompute of indicators'
+    COMMENT = 'Compute of indicators'
 AS
     SELECT CURRENT_TIMESTAMP AS last_run;
