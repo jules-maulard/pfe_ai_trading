@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import argparse
-from typing import List
+from typing import List, Optional
 
 from .config.settings import get_config
 from .retrievers import CAC40_TICKERS, YFinanceRetriever
@@ -20,11 +20,11 @@ def run_pipeline(symbols: List[str], storage: BaseStorage) -> None:
         return
 
     storage.save_ohlcv(ohlcv)
-    storage.update_indicators(symbols=symbols)
+    # storage.update_indicators(symbols=symbols)
 
-def _build_storage() -> BaseStorage:
+def _build_storage(backend: Optional[str] = None) -> BaseStorage:
     cfg = get_config()
-    backend = cfg.storage
+    backend = backend or cfg.storage
     logger.info(f"Using storage backend: {backend}")
     if backend == "csv":
         from .storage import CsvStorage
@@ -53,7 +53,7 @@ def get_params() -> dict:
 
 def main():
     params = get_params()
-    storage = _build_storage()
+    storage = _build_storage(params.get('backend'))
     run_pipeline(symbols=params['symbols'], storage=storage)
 
 

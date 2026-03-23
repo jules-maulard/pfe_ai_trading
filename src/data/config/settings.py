@@ -28,8 +28,9 @@ class AppConfig(BaseSettings):
     snowflake_account: str | None = None
     snowflake_user: str | None = None
     snowflake_password: str | None = None
-    snowflake_database: str = "PFE_TRADING"
-    snowflake_schema: str = "PUBLIC"
+    snowflake_role: str | None = None
+    snowflake_database: str = "TRADING_AI"
+    snowflake_schema: str = "MARKET_DATA"
     snowflake_warehouse: str = "COMPUTE_WH"
 
     @model_validator(mode="before")

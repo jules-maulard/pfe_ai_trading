@@ -21,14 +21,14 @@ CREATE RESOURCE MONITOR IF NOT EXISTS TRADING_COST_DAILY_MONITOR
 
 ALTER WAREHOUSE COMPUTE_WH SET RESOURCE_MONITOR = TRADING_COST_DAILY_MONITOR;
 
+ALTER USER "JMAULARD" SET DEFAULT_WAREHOUSE = COMPUTE_WH;
+GRANT USAGE ON WAREHOUSE COMPUTE_WH TO ROLE SYSADMIN;
 
 -- -- Setup network policy
--- -- Clean any existing bindings and policies
--- ALTER USER <user> UNSET NETWORK_POLICY; -- replace with your Snowflake user
--- ALTER ACCOUNT UNSET NETWORK_POLICY;
--- DROP NETWORK POLICY IF EXISTS AUTORISE_MON_IP;
+USE ROLE SECURITYADMIN;
 
--- -- Create and add a policy allowing multiple IPs
--- CREATE NETWORK POLICY autorise_mon_ip
---   ALLOWED_IP_LIST = ('<ip1>', '<ip2>'); -- replace with your actual IPs
--- ALTER USER <user> SET NETWORK_POLICY = autorise_mon_ip; -- replace with your Snowflake user
+CREATE NETWORK POLICY IF NOT EXISTS trading_ai_policy
+    ALLOWED_IP_LIST = ('147.161.181.110');
+ALTER NETWORK POLICY trading_ai_policy 
+    SET ALLOWED_IP_LIST = ('147.161.181.0/24');
+ALTER USER "JMAULARD" SET NETWORK_POLICY = trading_ai_policy;
