@@ -41,6 +41,8 @@ class AppConfig(BaseSettings):
         if _YAML_FILE.exists():
             yaml_data = yaml.safe_load(_YAML_FILE.read_text(encoding="utf-8")) or {}
             for key, value in yaml_data.items():
+                if value is None:
+                    continue
                 data.setdefault(key, value)
         return data
 
