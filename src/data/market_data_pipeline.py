@@ -12,14 +12,27 @@ logger = get_logger(__name__)
 
 
 def run_pipeline(symbols: List[str], storage: BaseStorage) -> None:
+    start_date = get_config().start_date
+    logger.info("Starting pipeline for %d symbol(s): %s", len(symbols), symbols)
+    logger.info("Fetching OHLCV data from %s to today", start_date)
+
     retriever = YFinanceRetriever()
-    ohlcv = retriever.get_ohlcv(symbols, start=get_config().start_date)
+    ohlcv = retriever.get_ohlcv(symbols, start=start_date)
 
     if ohlcv.empty:
         logger.warning("No OHLCV data fetched. Pipeline aborted.")
         return
 
+    logger.info(
+        "Fetched %d OHLCV rows covering %s → %s",
+        len(ohlcv),
+        ohlcv["date"].min() if "date" in ohlcv.columns else "?",
+        ohlcv["date"].max() if "date" in ohlcv.columns else "?",
+    )
+
+    logger.info("Saving OHLCV data to storage...")
     storage.save_ohlcv(ohlcv)
+    logger.info("OHLCV data saved successfully.")
     # storage.update_indicators(symbols=symbols)
 
 def _build_storage(backend: Optional[str] = None) -> BaseStorage:
@@ -49,7 +62,15 @@ def get_params() -> dict:
     # Precedence: CLI arg > config (env/YAML)
     backend = cli['backend'] or cfg.storage
     symbols = cli['symbols'] or cfg.symbols or CAC40_TICKERS
-    return dict(backend=backend, symbols=symbols, start=cfg.start_date)
+    params = dict(backend=backend, symbols=symbols, start=cfg.start_date)
+    logger.info(
+        "Pipeline parameters — backend: %s | symbols (%d): %s | start: %s",
+        params['backend'],
+        len(params['symbols']),
+        params['symbols'],
+        params['start'],
+    )
+    return params
 
 def main():
     params = get_params()

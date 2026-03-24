@@ -159,57 +159,73 @@ class SnowflakeStorage(BaseStorage):
 
     def _upsert_data(self, data: pd.DataFrame, table: str) -> str:
         if data.empty:
+            logger.info("[UPSERT] No data to upsert into '%s' (empty DataFrame).", table)
             return f"{self.database}.{self.schema}.{table}"
 
         working_data = data.copy()
         working_data["date"] = pd.to_datetime(working_data["date"]).dt.date
         unique_symbols = working_data["symbol"].unique().tolist()
-        
+        logger.info(
+            "[UPSERT] Starting upsert into '%s' — %d row(s), %d symbol(s): %s",
+            table, len(working_data), len(unique_symbols), unique_symbols,
+        )
+
         latest_dates = self._get_latest_dates(table, unique_symbols)
+        if latest_dates:
+            logger.info("[UPSERT] Latest dates in '%s': %s", table, latest_dates)
+        else:
+            logger.info("[UPSERT] No existing data found in '%s' for these symbols — full insert.", table)
 
         if latest_dates:
             working_data["last_date"] = working_data["symbol"].map(latest_dates)
             working_data["last_date"] = pd.to_datetime(working_data["last_date"]).dt.date
-            
+
             is_new_symbol = working_data["last_date"].isna()
             is_recent_date = working_data["date"] > working_data["last_date"]
-            
+
             working_data = working_data[is_new_symbol | is_recent_date].drop(columns=["last_date"])
+            logger.info("[UPSERT] %d new row(s) to insert after filtering duplicates.", len(working_data))
 
         if working_data.empty:
+            logger.info("[UPSERT] All rows already present in '%s'. Nothing to insert.", table)
             return f"{self.database}.{self.schema}.{table}"
 
-        return self._execute_load(working_data, table)
+        return self.upload_dataframe_to_snowflake(working_data, table)
 
-    def _execute_load(self, data: pd.DataFrame, table: str) -> str:
-        working_data = self._prepare_dataframe_for_snowflake(data)
+    def upload_dataframe_to_snowflake(self, data: pd.DataFrame, table: str) -> str:
+        working_data = self.normalize_dataframe_for_snowflake(data)
         with tempfile.TemporaryDirectory() as temporary_directory:
-            file_path = self._serialize_to_parquet(working_data, table, temporary_directory)
-            self._put_file_to_stage(file_path, table)
-            return self._copy_into_table(working_data.columns.tolist(), table)
+            file_path = self.save_dataframe_as_parquet(working_data, table, temporary_directory)
+            self.upload_file_to_stage(file_path, table)
+            return self.load_stage_into_table(working_data.columns.tolist(), table)
 
-    def _prepare_dataframe_for_snowflake(self, data: pd.DataFrame) -> pd.DataFrame:
+    def normalize_dataframe_for_snowflake(self, data: pd.DataFrame) -> pd.DataFrame:
         working_data = data.copy()
         if "date" in working_data.columns:
             working_data["date"] = pd.to_datetime(working_data["date"]).dt.date
         working_data.columns = [column_name.upper() for column_name in working_data.columns]
         return working_data
 
-    def _serialize_to_parquet(self, data: pd.DataFrame, table: str, directory: str) -> Path:
+    def save_dataframe_as_parquet(self, data: pd.DataFrame, table: str, directory: str) -> Path:
         file_name = f"{table}_{uuid.uuid4().hex}.parquet"
         file_path = Path(directory) / file_name
         data.to_parquet(file_path, index=False, engine="pyarrow")
         return file_path
 
-    def _put_file_to_stage(self, file_path: Path, table: str) -> None:
+    def upload_file_to_stage(self, file_path: Path, table: str) -> None:
         put_query = (
             f"PUT 'file://{file_path.as_posix()}' @{SNOWFLAKE_STAGE}/{table}/ "
             "AUTO_COMPRESS=FALSE OVERWRITE=TRUE"
         )
+        logger.info("[PUT] Uploading '%s' → stage @%s/%s/", file_path.name, SNOWFLAKE_STAGE, table)
         with self._connect() as connection, connection.cursor() as cursor:
             cursor.execute(put_query)
+            rows = cursor.fetchall()
+            for row in rows:
+                logger.debug("[PUT] %s", row)
+        logger.info("[PUT] Upload complete for table '%s'.", table)
 
-    def _copy_into_table(self, columns: List[str], table: str) -> str:
+    def load_stage_into_table(self, columns: List[str], table: str) -> str:
         fully_qualified_name = f"{self.database}.{self.schema}.{table}"
         columns_list = ", ".join(columns)
         select_list = ", ".join(f"$1:{column_name}" for column_name in columns)
@@ -220,7 +236,15 @@ class SnowflakeStorage(BaseStorage):
             f"FILE_FORMAT = (FORMAT_NAME = '{SNOWFLAKE_PARQUET_FORMAT}') "
             "PURGE = TRUE"
         )
+        logger.info(
+            "[COPY INTO] Loading stage @%s/%s/ → %s (%d column(s): %s)",
+            SNOWFLAKE_STAGE, table, fully_qualified_name, len(columns), columns_list,
+        )
         with self._connect() as connection, connection.cursor() as cursor:
             cursor.execute(copy_query)
+            rows = cursor.fetchall()
+            for row in rows:
+                logger.debug("[COPY INTO] %s", row)
+        logger.info("[COPY INTO] Done for table '%s'.", table)
 
         return fully_qualified_name
