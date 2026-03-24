@@ -182,21 +182,26 @@ class SnowflakeStorage(BaseStorage):
         return self._execute_load(working_data, table)
 
     def _execute_load(self, data: pd.DataFrame, table: str) -> str:
+        working_data = self._prepare_dataframe_for_snowflake(data)
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            file_path = self._serialize_to_parquet(working_data, table, temporary_directory)
+            self._put_file_to_stage(file_path, table)
+            return self._copy_into_table(working_data.columns.tolist(), table)
+
+    def _prepare_dataframe_for_snowflake(self, data: pd.DataFrame) -> pd.DataFrame:
         working_data = data.copy()
         if "date" in working_data.columns:
             working_data["date"] = pd.to_datetime(working_data["date"]).dt.date
-            
         working_data.columns = [column_name.upper() for column_name in working_data.columns]
+        return working_data
 
-        with tempfile.TemporaryDirectory() as temporary_directory:
-            file_name = f"{table}_{uuid.uuid4().hex}.parquet"
-            file_path = Path(temporary_directory) / file_name
-            working_data.to_parquet(file_path, index=False, engine="pyarrow")
+    def _serialize_to_parquet(self, data: pd.DataFrame, table: str, directory: str) -> Path:
+        file_name = f"{table}_{uuid.uuid4().hex}.parquet"
+        file_path = Path(directory) / file_name
+        data.to_parquet(file_path, index=False, engine="pyarrow")
+        return file_path
 
-            self._upload_file_to_stage(file_path, table)
-            return self._copy_stage_to_table(working_data.columns.tolist(), table)
-
-    def _upload_file_to_stage(self, file_path: Path, table: str) -> None:
+    def _put_file_to_stage(self, file_path: Path, table: str) -> None:
         put_query = (
             f"PUT 'file://{file_path.as_posix()}' @{SNOWFLAKE_STAGE}/{table}/ "
             "AUTO_COMPRESS=FALSE OVERWRITE=TRUE"
@@ -204,18 +209,17 @@ class SnowflakeStorage(BaseStorage):
         with self._connect() as connection, connection.cursor() as cursor:
             cursor.execute(put_query)
 
-    def _copy_stage_to_table(self, columns: List[str], table: str) -> str:
+    def _copy_into_table(self, columns: List[str], table: str) -> str:
         fully_qualified_name = f"{self.database}.{self.schema}.{table}"
         columns_list = ", ".join(columns)
         select_list = ", ".join(f"$1:{column_name}" for column_name in columns)
-        
+
         copy_query = (
             f"COPY INTO {fully_qualified_name} ({columns_list}) "
             f"FROM (SELECT {select_list} FROM @{SNOWFLAKE_STAGE}/{table}/) "
             f"FILE_FORMAT = (FORMAT_NAME = '{SNOWFLAKE_PARQUET_FORMAT}') "
             "PURGE = TRUE"
         )
-
         with self._connect() as connection, connection.cursor() as cursor:
             cursor.execute(copy_query)
 
