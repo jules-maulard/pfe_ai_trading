@@ -1,5 +1,4 @@
 symbols:
-  # - AIR.PA
-  # - BNP.PA
+  # No symbol for CAC40
 start_date: "2026-03-01"
 storage: "snowflake"
