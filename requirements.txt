@@ -1,7 +1,7 @@
 yfinance
 pandas
 fastmcp
-groq
+litellm
 python-dotenv
 pyyaml
 concurrent-log-handler

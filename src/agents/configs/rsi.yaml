@@ -24,4 +24,5 @@ system_prompt: |
   - If the user asks for a specific period, pass `start` / `end` explicitly.
   - Never process the entire history unless the user explicitly requests it.
 
+model: "openai/gpt-oss-20b"
 agent_name: "RSI MCP Agent"

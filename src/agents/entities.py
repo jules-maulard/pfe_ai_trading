@@ -50,7 +50,7 @@ class Tool:
 
 @dataclass
 class Configuration:
-    api_key: str
+    api_keys: List[str]
     model: str
     mcp_server_scripts: List[str] = field(default_factory=list)
     system_prompt: str = ""
@@ -66,10 +66,18 @@ class Configuration:
         model: str = "openai/gpt-oss-20b",
     ) -> Configuration:
         load_dotenv(Path(__file__).resolve().parents[2] / ".env")
-        api_key = os.environ.get("GROQ_API_KEY") or os.environ.get("OPENAI_API_KEY") or ""
+        api_keys = cls._load_api_keys()
         return cls(
-            api_key=api_key,
+            api_keys=api_keys,
             model=model,
             mcp_server_scripts=mcp_server_scripts or [],
             system_prompt=system_prompt,
         )
+
+    @staticmethod
+    def _load_api_keys() -> List[str]:
+        raw = os.environ.get("GROQ_API_KEYS", "")
+        if raw:
+            return [k.strip() for k in raw.split(",") if k.strip()]
+        single = os.environ.get("GROQ_API_KEY", "")
+        return [single] if single else []
