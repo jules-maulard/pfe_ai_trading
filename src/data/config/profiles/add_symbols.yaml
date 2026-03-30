@@ -1,0 +1,25 @@
+name: add_symbols
+
+symbols:
+  source: list
+  tickers:
+    - AIR.PA    # <-- replace / extend with your symbols
+    # - AAPL
+
+dates:
+  mode: fixed
+  start_date: "2022-01-01"
+  end_date: "2026-03-20"  # defaults to today
+
+storage: csv
+
+fetch:
+  ohlcv: true
+  dividends: false
+  asset_info: true
+
+indicators:
+  enabled: true
+  compute:
+    - rsi
+    - macd

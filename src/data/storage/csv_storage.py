@@ -67,14 +67,13 @@ class CsvStorage(BaseStorage):
 
     def _upsert(self, df: pd.DataFrame, table: str) -> str:
         path = self._path(table)
-        symbols = list(df["symbol"].unique())
         if path.exists():
-            syms_sql = ", ".join(f"'{s}'" for s in symbols)
             source = f"'{path.as_posix()}'"
-            others = duckdb.sql(
-                f"SELECT * FROM read_csv_auto({source}) WHERE symbol NOT IN ({syms_sql})"
-            ).df()
-            combined = pd.concat([others, df], ignore_index=True)
+            existing = duckdb.sql(f"SELECT * FROM read_csv_auto({source})").df()
+            combined = pd.concat([existing, df], ignore_index=True)
+            key_cols = [c for c in ["symbol", "date"] if c in combined.columns]
+            if key_cols:
+                combined = combined.drop_duplicates(subset=key_cols, keep="last")
         else:
             combined = df
         return self._save(combined, table)
@@ -118,6 +117,15 @@ class CsvStorage(BaseStorage):
     ) -> pd.DataFrame:
         return self._load("indicators", symbols=symbols, start=start, end=end)
 
+    def list_symbols(self, table: str = "ohlcv") -> List[str]:
+        path = self._path(table)
+        if not path.exists():
+            return []
+        source = f"'{path.as_posix()}'"
+        sql = f"SELECT DISTINCT symbol FROM read_csv_auto({source}) ORDER BY symbol"
+        result = duckdb.sql(sql).df()
+        return result["symbol"].tolist()
+
     def get_last_date(self, table: str, symbol: str) -> Optional[str]:
         path = self._path(table)
         if not path.exists():
@@ -133,28 +141,43 @@ class CsvStorage(BaseStorage):
             return None
         return str(val)
 
+    def get_last_dates(self, table: str, symbols: List[str]) -> dict:
+        path = self._path(table)
+        if not path.exists() or not symbols:
+            return {}
+        source = f"'{path.as_posix()}'"
+        syms = ", ".join(f"'{s}'" for s in symbols)
+        sql = (
+            f"SELECT symbol, MAX(date) AS last_date FROM read_csv_auto({source}) "
+            f"WHERE symbol IN ({syms}) GROUP BY symbol"
+        )
+        result = duckdb.sql(sql).df()
+        return {
+            row["symbol"]: str(row["last_date"])
+            for _, row in result.iterrows()
+            if not pd.isna(row["last_date"])
+        }
+
     def update_indicators(
         self,
         symbols: Optional[List[str]] = None,
         start: Optional[str] = None,
         end: Optional[str] = None,
+        indicator_names: Optional[List[str]] = None,
     ) -> str:
-        from ...mcp_servers.rsi_service import RSIService
-        from ...mcp_servers.macd_service import MACDService
+        from ..indicators import INDICATOR_REGISTRY, compute_indicators
 
         ohlcv = self.load_ohlcv(symbols=symbols, start=start, end=end)
         if ohlcv.empty:
             logger.warning("No OHLCV data found for indicator computation.")
             return ""
 
-        rsi_df = RSIService.compute_rsi_wilder(ohlcv)
-        macd_df = MACDService.compute_macd(rsi_df)
+        names = indicator_names or list(INDICATOR_REGISTRY.keys())
+        result = compute_indicators(ohlcv, names)
+        if result.empty:
+            logger.warning("Indicator computation produced no rows.")
+            return ""
 
-        indicators = macd_df[["symbol", "date", "rsi14", "macd", "macd_signal", "macd_hist"]].copy()
-        indicators = indicators.rename(columns={"rsi14": "rsi"})
-        indicators = indicators.dropna(subset=["rsi", "macd", "macd_signal", "macd_hist"])
-        indicators = indicators.sort_values(["symbol", "date"]).reset_index(drop=True)
-
-        saved = self.save_indicators(indicators)
-        logger.info("Computed and saved %d indicator rows to %s", len(indicators), saved)
+        saved = self.save_indicators(result)
+        logger.info("Computed and saved %d indicator rows to %s", len(result), saved)
         return saved

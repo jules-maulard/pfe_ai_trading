@@ -1,0 +1,17 @@
+name: catchup
+
+symbols:
+  source: storage   # update all symbols already in the database
+
+dates:
+  mode: incremental
+
+storage: csv
+
+fetch:
+  ohlcv: true
+  dividends: false
+  asset_info: false
+
+indicators:
+  enabled: false

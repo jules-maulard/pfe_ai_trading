@@ -1,0 +1,21 @@
+name: compute_indicators
+
+symbols:
+  source: storage   # compute for all symbols present in the database
+
+dates:
+  mode: full   # load all available OHLCV history for computation
+
+storage: csv
+
+fetch:
+  ohlcv: false
+  dividends: false
+  asset_info: false
+
+indicators:
+  enabled: true
+  compute:
+    - rsi
+    - macd
+  # symbols: null  # null = same symbols as resolved above

@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Optional
 
 from ..data import BaseStorage
 from ..data import CsvStorage
+from ..data.config.settings import get_storage
 from ..utils import get_logger
 
 logger = get_logger(__name__)
@@ -12,7 +13,7 @@ logger = get_logger(__name__)
 
 class MACDService:
     def __init__(self, storage: BaseStorage = None):
-        self.storage = storage or CsvStorage()
+        self.storage = storage or get_storage()
 
     def compute(
         self,

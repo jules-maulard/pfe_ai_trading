@@ -43,7 +43,6 @@ class BaseStorage(ABC):
 
     @abstractmethod
     def save_indicators(self, df: pd.DataFrame) -> str:
-    # def save_indicators(self, indicator: str, df: pd.DataFrame) -> str:
         ...
 
     @abstractmethod
@@ -56,7 +55,16 @@ class BaseStorage(ABC):
         ...
 
     @abstractmethod
+    def list_symbols(self, table: str = "ohlcv") -> List[str]:
+        ...
+
+    @abstractmethod
     def get_last_date(self, table: str, symbol: str) -> Optional[str]:
+        ...
+
+    @abstractmethod
+    def get_last_dates(self, table: str, symbols: List[str]) -> dict:
+        """Return {symbol: last_date_str} for all given symbols in one query."""
         ...
 
     @abstractmethod

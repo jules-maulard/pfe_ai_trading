@@ -1,0 +1,20 @@
+name: daily
+
+symbols:
+  source: storage   # use whatever symbols already exist in the database
+
+dates:
+  mode: incremental   # fetch only data newer than last stored date per symbol
+
+storage: snowflake
+
+fetch:
+  ohlcv: true
+  dividends: false
+  asset_info: false
+
+indicators:
+  enabled: false
+  # compute:
+  #   - rsi
+  #   - macd

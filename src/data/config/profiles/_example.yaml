@@ -1,0 +1,75 @@
+# ============================================================================
+#  Pipeline Profile — Full Reference
+# ============================================================================
+#  Copy this file, rename it, and adjust values for your use-case.
+#  Place it in src/data/config/profiles/<name>.yaml
+#  Then run:  python -m src.data.market_data_pipeline --profile <name>
+# ============================================================================
+
+# Profile name (used in logs). Defaults to the filename if omitted.
+name: my_profile
+
+# ── Symbols ────────────────────────────────────────────────────────────────
+symbols:
+  # How to determine which symbols to process:
+  #   "list"    → use the explicit tickers below
+  #   "storage" → use all symbols already present in the database (OHLCV table)
+  source: list        # "list" | "storage"
+
+  # Explicit list of tickers (only used when source = "list").
+  # For CAC 40, the full list is:
+  #   AI.PA, AIR.PA, ALO.PA, MT.AS, CS.PA, BNP.PA, EN.PA, CAP.PA, CA.PA,
+  #   ACA.PA, BN.PA, DSY.PA, ENGI.PA, EL.PA, ERF.PA, RMS.PA, KER.PA,
+  #   LR.PA, OR.PA, MC.PA, ML.PA, ORA.PA, RI.PA, PUB.PA, SAF.PA, SGO.PA,
+  #   SAN.PA, SU.PA, GLE.PA, STLAP.PA, STM.PA, TEP.PA, HO.PA, TTE.PA,
+  #   URW.AS, VIE.PA, DG.PA, VIV.PA, WLN.PA
+  tickers:
+    - AI.PA
+    - AIR.PA
+    # - AAPL          # any valid Yahoo Finance ticker
+
+# ── Dates ──────────────────────────────────────────────────────────────────
+dates:
+  # How to determine the date range for fetching:
+  #   "incremental" → from last stored date + 1 day per symbol (catch-up mode)
+  #   "fixed"       → from start_date to end_date (or today)
+  #   "full"        → no date filter, fetch/load everything available
+  mode: incremental   # "incremental" | "fixed" | "full"
+
+  # Required when mode = "fixed". Ignored otherwise.
+  # start_date: "2022-01-01"
+
+  # Optional upper bound (defaults to today if omitted).
+  # end_date: "2025-12-31"
+
+# ── Storage backend ───────────────────────────────────────────────────────
+# Where data is read from and written to.
+# "csv"       → local CSV files in database/csv/
+# "snowflake" → Snowflake tables (requires credentials in .env)
+storage: csv          # "csv" | "snowflake"
+
+# ── Fetch ──────────────────────────────────────────────────────────────────
+# Which data types to download from Yahoo Finance.
+# Set to false to skip fetching entirely (e.g. indicators-only run).
+fetch:
+  ohlcv: true               # daily Open/High/Low/Close/Volume
+  dividends: false           # dividend history per symbol
+  asset_info: false          # company metadata (sector, name, etc.)
+  income_statement: false    # annual income statement data
+
+# ── Indicators ─────────────────────────────────────────────────────────────
+# Compute technical indicators on stored OHLCV data and save the results.
+indicators:
+  enabled: false             # set to true to compute indicators
+
+  # Which indicators to compute. Available: rsi, macd
+  # (add your own in src/data/indicators.py → INDICATOR_REGISTRY)
+  compute:
+    - rsi
+    - macd
+
+  # Optional: compute indicators only for a subset of symbols.
+  # If omitted, uses the same symbols resolved above.
+  # symbols:
+  #   - AIR.PA
+  #   - BNP.PA

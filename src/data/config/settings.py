@@ -4,13 +4,11 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-import yaml
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _ROOT = Path(__file__).resolve().parents[3]
 _ENV_FILE = _ROOT / ".env"
-_YAML_FILE = Path(__file__).parent / "default_config.yaml"
 
 
 class AppConfig(BaseSettings):
@@ -38,12 +36,6 @@ class AppConfig(BaseSettings):
     def _load_yaml_defaults(cls, data: dict) -> dict:
         if "storage_backend" in data and "storage" not in data:
             data["storage"] = data.pop("storage_backend")
-        if _YAML_FILE.exists():
-            yaml_data = yaml.safe_load(_YAML_FILE.read_text(encoding="utf-8")) or {}
-            for key, value in yaml_data.items():
-                if value is None:
-                    continue
-                data.setdefault(key, value)
         return data
 
     @model_validator(mode="after")
@@ -69,3 +61,17 @@ class AppConfig(BaseSettings):
 @lru_cache(maxsize=1)
 def get_config() -> AppConfig:
     return AppConfig()
+
+
+def get_storage():
+    """Return a storage instance based on STORAGE_BACKEND in .env.
+
+    Used by MCP servers and any read-only component that should not
+    hard-code a backend. The pipeline uses its own profile storage field.
+    """
+    from ..storage import CsvStorage, SnowflakeStorage
+
+    backend = get_config().storage
+    if backend == "snowflake":
+        return SnowflakeStorage()
+    return CsvStorage()

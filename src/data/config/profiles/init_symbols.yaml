@@ -1,0 +1,62 @@
+name: init_symbols
+
+symbols:
+  source: list
+  tickers:
+    # CAC 40 
+    - AI.PA
+    - AIR.PA     
+    - ALO.PA     
+    - MT.AS      
+    - CS.PA      
+    - BNP.PA     
+    - EN.PA      
+    - CAP.PA     
+    - CA.PA      
+    - ACA.PA      
+    - BN.PA      
+    - DSY.PA      
+    - ENGI.PA    
+    - EL.PA      
+    - ERF.PA      
+    - RMS.PA     
+    - KER.PA     
+    - LR.PA      
+    - OR.PA      
+    - MC.PA      
+    - ML.PA      
+    - ORA.PA     
+    - RI.PA       
+    - PUB.PA     
+    - SAF.PA     
+    - SGO.PA     
+    - SAN.PA     
+    - SU.PA       
+    - GLE.PA      
+    - STLAP.PA   
+    - STM.PA     
+    - TEP.PA     
+    - HO.PA      
+    - TTE.PA     
+    - URW.AS     
+    - VIE.PA     
+    - DG.PA      
+    - VIV.PA     
+    - WLN.PA     
+
+dates:
+  # Pas de filtre de date (aucune data présente) : on récupère tout l'historique disponible (depuis _DEFAULT_INCREMENTAL_FALLBACK)
+  mode: incremental
+
+storage: snowflake
+
+fetch:
+  ohlcv: true
+  dividends: false
+  asset_info: true
+  income_statement: false
+
+# Les indicateurs sont désactivés ici.
+# Les calculer ensuite avec : --profile compute_indicators
+indicators:
+  enabled: false

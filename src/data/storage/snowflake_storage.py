@@ -83,9 +83,20 @@ class SnowflakeStorage(BaseStorage):
     ) -> pd.DataFrame:
         return self._read_data(SNOWFLAKE_INDICATORS_TABLE, symbols=symbols, start=start, end=end)
 
+    def list_symbols(self, table: str = "ohlcv") -> List[str]:
+        table_name = table.upper()
+        query = f"SELECT DISTINCT symbol FROM {table_name} ORDER BY symbol"
+        with self._connect() as connection, connection.cursor() as cursor:
+            cursor.execute(query)
+            rows = cursor.fetchall()
+        return [row[0] for row in rows]
+
     def get_last_date(self, table: str, symbol: str) -> Optional[str]:
         latest_dates = self._get_latest_dates(table, [symbol])
         return latest_dates.get(symbol)
+
+    def get_last_dates(self, table: str, symbols: List[str]) -> dict:
+        return self._get_latest_dates(table, symbols)
 
     def update_indicators(
         self,
@@ -163,28 +174,33 @@ class SnowflakeStorage(BaseStorage):
             return f"{self.database}.{self.schema}.{table}"
 
         working_data = data.copy()
-        working_data["date"] = pd.to_datetime(working_data["date"]).dt.date
+        has_date = "date" in working_data.columns
+        if has_date:
+            working_data["date"] = pd.to_datetime(working_data["date"]).dt.date
         unique_symbols = working_data["symbol"].unique().tolist()
         logger.info(
             "[UPSERT] Starting upsert into '%s' — %d row(s), %d symbol(s): %s",
             table, len(working_data), len(unique_symbols), unique_symbols,
         )
 
-        latest_dates = self._get_latest_dates(table, unique_symbols)
-        if latest_dates:
-            logger.info("[UPSERT] Latest dates in '%s': %s", table, latest_dates)
+        if has_date:
+            latest_dates = self._get_latest_dates(table, unique_symbols)
+            if latest_dates:
+                logger.info("[UPSERT] Latest dates in '%s': %s", table, latest_dates)
+            else:
+                logger.info("[UPSERT] No existing data found in '%s' for these symbols — full insert.", table)
+
+            if latest_dates:
+                working_data["last_date"] = working_data["symbol"].map(latest_dates)
+                working_data["last_date"] = pd.to_datetime(working_data["last_date"]).dt.date
+
+                is_new_symbol = working_data["last_date"].isna()
+                is_recent_date = working_data["date"] > working_data["last_date"]
+
+                working_data = working_data[is_new_symbol | is_recent_date].drop(columns=["last_date"])
+                logger.info("[UPSERT] %d new row(s) to insert after filtering duplicates.", len(working_data))
         else:
-            logger.info("[UPSERT] No existing data found in '%s' for these symbols — full insert.", table)
-
-        if latest_dates:
-            working_data["last_date"] = working_data["symbol"].map(latest_dates)
-            working_data["last_date"] = pd.to_datetime(working_data["last_date"]).dt.date
-
-            is_new_symbol = working_data["last_date"].isna()
-            is_recent_date = working_data["date"] > working_data["last_date"]
-
-            working_data = working_data[is_new_symbol | is_recent_date].drop(columns=["last_date"])
-            logger.info("[UPSERT] %d new row(s) to insert after filtering duplicates.", len(working_data))
+            logger.info("[UPSERT] No date column in '%s' — inserting all rows (symbol-keyed table).", table)
 
         if working_data.empty:
             logger.info("[UPSERT] All rows already present in '%s'. Nothing to insert.", table)
