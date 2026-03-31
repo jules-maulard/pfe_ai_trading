@@ -171,7 +171,7 @@ def run_pipeline(config: PipelineConfig, storage: BaseStorage) -> None:
         retriever = YFinanceRetriever()
         start_map = _resolve_start_dates(config, symbols, storage)
         end_date = config.dates.end_date or (
-            datetime.utcnow() - timedelta(days=1)
+            datetime.now().date() - timedelta(days=1)
         ).strftime("%Y-%m-%d")
 
         if config.fetch.ohlcv:
