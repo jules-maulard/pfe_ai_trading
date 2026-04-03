@@ -16,6 +16,7 @@ fetch:
 indicators:
   enabled: true
   compute:
-    - rsi
-    - macd
+    # - rsi
+    # - macd
+    - pivot
   # symbols: null  # null = same symbols as resolved above

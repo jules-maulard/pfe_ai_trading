@@ -18,6 +18,7 @@ _TABLE_COLUMNS: dict[str, list[str]] = {
     "asset": ["symbol"],
     "indicator_rsi": ["symbol", "date", "rsi"],
     "indicator_macd": ["symbol", "date", "macd", "macd_signal", "macd_hist"],
+    "indicator_pivot": ["symbol", "date", "pivot", "r1", "s1", "r2", "s2", "r3", "s3"],
 }
 
 

@@ -28,9 +28,15 @@ def _compute_macd(ohlcv: pd.DataFrame) -> pd.DataFrame:
     return MACDService.compute_macd(ohlcv)
 
 
+def _compute_pivot(ohlcv: pd.DataFrame) -> pd.DataFrame:
+    from ..mcp_servers.pivot_service import PivotService
+    return PivotService.compute_pivots(ohlcv)
+
+
 INDICATOR_REGISTRY: dict[str, IndicatorDef] = {
     "rsi": IndicatorDef(compute=_compute_rsi, columns=["rsi"]),
     "macd": IndicatorDef(compute=_compute_macd, columns=["macd", "macd_signal", "macd_hist"]),
+    "pivot": IndicatorDef(compute=_compute_pivot, columns=["pivot", "r1", "s1", "r2", "s2", "r3", "s3"]),
 }
 
 
