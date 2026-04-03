@@ -17,27 +17,17 @@ class RSIService:
 
     def compute(
         self,
-        window: int = 14,
-        price_col: str = "close",
         symbols: Optional[List[str]] = None,
         start: Optional[str] = None,
         end: Optional[str] = None,
         sample_rows: int = 5,
     ) -> Dict[str, Any]:
-        logger.debug("compute_rsi: window=%d symbols=%s start=%s end=%s", window, symbols, start, end)
-        df = self.storage.load_ohlcv(symbols=symbols, start=start, end=end)
-
-        needed = {"symbol", "date", price_col}
-        missing = needed - set(df.columns)
-        if missing:
-            raise ValueError(f"Missing columns: {sorted(missing)}")
-
-        out = self.compute_rsi_wilder(df, price_col=price_col, window=window)
-        rsi_col = f"rsi{window}"
+        logger.debug("compute_rsi: symbols=%s start=%s end=%s", symbols, start, end)
+        df = self.storage.load_indicator("rsi", symbols=symbols, start=start, end=end)
 
         result = (
-            out[["symbol", "date", rsi_col]]
-            .dropna(subset=[rsi_col])
+            df[["symbol", "date", "rsi"]]
+            .dropna(subset=["rsi"])
             .sort_values(["symbol", "date"])
             .reset_index(drop=True)
         )
@@ -47,7 +37,7 @@ class RSIService:
         return {
             "status": "ok",
             "count": int(len(result)),
-            "columns": ["symbol", "date", rsi_col],
+            "columns": ["symbol", "date", "rsi"],
             "sample": sample,
         }
 
@@ -83,8 +73,6 @@ class RSIService:
     # ------------------------------------------------------------------ #
     def detect_extremes(
         self,
-        window: int = 14,
-        price_col: str = "close",
         overbought: float = 70.0,
         oversold: float = 30.0,
         symbols: Optional[List[str]] = None,
@@ -94,18 +82,15 @@ class RSIService:
     ) -> Dict[str, Any]:
         """Identify periods where the RSI crosses overbought / oversold thresholds."""
         logger.debug("detect_extremes: symbols=%s overbought=%.1f oversold=%.1f start=%s end=%s", symbols, overbought, oversold, start, end)
-        df = self.storage.load_ohlcv(symbols=symbols, start=start, end=end)
-        rsi_df = self.compute_rsi_wilder(df, price_col=price_col, window=window)
-        rsi_col = f"rsi{window}"
-
-        rsi_df = rsi_df.dropna(subset=[rsi_col]).sort_values(["symbol", "date"]).reset_index(drop=True)
+        rsi_df = self.storage.load_indicator("rsi", symbols=symbols, start=start, end=end)
+        rsi_df = rsi_df.dropna(subset=["rsi"]).sort_values(["symbol", "date"]).reset_index(drop=True)
 
         events: list[dict] = []
         for symbol, g in rsi_df.groupby("symbol"):
             g = g.reset_index(drop=True)
             prev_zone = "neutral"
             for i, row in g.iterrows():
-                rsi_val = row[rsi_col]
+                rsi_val = row["rsi"]
                 if rsi_val >= overbought:
                     zone = "overbought"
                 elif rsi_val <= oversold:
@@ -137,7 +122,6 @@ class RSIService:
     # ------------------------------------------------------------------ #
     def find_divergences(
         self,
-        window: int = 14,
         price_col: str = "close",
         pivot_lookback: int = 5,
         symbols: Optional[List[str]] = None,
@@ -147,17 +131,17 @@ class RSIService:
     ) -> Dict[str, Any]:
         """Detect regular and hidden divergences between price and RSI."""
         logger.debug("find_divergences: symbols=%s start=%s end=%s pivot_lookback=%d", symbols, start, end, pivot_lookback)
-        df = self.storage.load_ohlcv(symbols=symbols, start=start, end=end)
-        rsi_df = self.compute_rsi_wilder(df, price_col=price_col, window=window)
-        rsi_col = f"rsi{window}"
-        rsi_df = rsi_df.dropna(subset=[rsi_col]).sort_values(["symbol", "date"]).reset_index(drop=True)
+        ohlcv_df = self.storage.load_ohlcv(symbols=symbols, start=start, end=end)
+        rsi_df = self.storage.load_indicator("rsi", symbols=symbols, start=start, end=end)
+        merged = ohlcv_df.merge(rsi_df, on=["symbol", "date"], how="inner")
+        merged = merged.dropna(subset=["rsi"]).sort_values(["symbol", "date"]).reset_index(drop=True)
 
         divergences: list[dict] = []
 
-        for symbol, g in rsi_df.groupby("symbol"):
+        for symbol, g in merged.groupby("symbol"):
             g = g.reset_index(drop=True)
             prices = g[price_col].values
-            rsis = g[rsi_col].values
+            rsis = g["rsi"].values
             dates = g["date"].values
             n = len(g)
 
@@ -274,8 +258,6 @@ class RSIService:
     # ------------------------------------------------------------------ #
     def detect_failure_swings(
         self,
-        window: int = 14,
-        price_col: str = "close",
         overbought: float = 70.0,
         oversold: float = 30.0,
         pivot_lookback: int = 5,
@@ -293,16 +275,14 @@ class RSIService:
         (stays below overbought), then breaks the drop low.
         """
         logger.debug("detect_failure_swings: symbols=%s overbought=%.1f oversold=%.1f start=%s end=%s", symbols, overbought, oversold, start, end)
-        df = self.storage.load_ohlcv(symbols=symbols, start=start, end=end)
-        rsi_df = self.compute_rsi_wilder(df, price_col=price_col, window=window)
-        rsi_col = f"rsi{window}"
-        rsi_df = rsi_df.dropna(subset=[rsi_col]).sort_values(["symbol", "date"]).reset_index(drop=True)
+        rsi_df = self.storage.load_indicator("rsi", symbols=symbols, start=start, end=end)
+        rsi_df = rsi_df.dropna(subset=["rsi"]).sort_values(["symbol", "date"]).reset_index(drop=True)
 
         swings: list[dict] = []
 
         for symbol, g in rsi_df.groupby("symbol"):
             g = g.reset_index(drop=True)
-            rsis = g[rsi_col].values
+            rsis = g["rsi"].values
             dates = g["date"].values
             n = len(g)
 

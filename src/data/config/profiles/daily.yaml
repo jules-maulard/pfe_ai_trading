@@ -14,7 +14,7 @@ fetch:
   asset_info: false
 
 indicators:
-  enabled: false
-  # compute:
-  #   - rsi
-  #   - macd
+  enabled: true
+  compute:
+    - rsi
+    - macd

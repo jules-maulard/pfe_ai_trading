@@ -64,15 +64,12 @@ def list_symbols() -> Dict[str, Any]:
     description="Compute Wilder's RSI for symbols from local OHLCV data.",
 )
 def compute_rsi(
-    window: int = 14,
-    price_col: str = "close",
     symbols: Optional[List[str]] = None,
     start: Optional[str] = None,
     end: Optional[str] = None,
     sample_rows: int = 5,
 ) -> Dict[str, Any]:
     return rsi_service.compute(
-        window=window, price_col=price_col,
         symbols=symbols, start=start or _default_start(), end=end,
         sample_rows=sample_rows,
     )
@@ -86,8 +83,6 @@ def compute_rsi(
     ),
 )
 def detect_extremes(
-    window: int = 14,
-    price_col: str = "close",
     overbought: float = 70.0,
     oversold: float = 30.0,
     symbols: Optional[List[str]] = None,
@@ -96,7 +91,6 @@ def detect_extremes(
     sample_rows: int = 10,
 ) -> Dict[str, Any]:
     return rsi_service.detect_extremes(
-        window=window, price_col=price_col,
         overbought=overbought, oversold=oversold,
         symbols=symbols, start=start or _default_start(), end=end,
         sample_rows=sample_rows,
@@ -112,7 +106,6 @@ def detect_extremes(
     ),
 )
 def find_divergences(
-    window: int = 14,
     price_col: str = "close",
     pivot_lookback: int = 5,
     symbols: Optional[List[str]] = None,
@@ -121,7 +114,7 @@ def find_divergences(
     sample_rows: int = 10,
 ) -> Dict[str, Any]:
     return rsi_service.find_divergences(
-        window=window, price_col=price_col,
+        price_col=price_col,
         pivot_lookback=pivot_lookback,
         symbols=symbols, start=start or _default_start(), end=end,
         sample_rows=sample_rows,
@@ -161,8 +154,6 @@ def analyze_multi_timeframe_rsi(
     ),
 )
 def detect_failure_swings(
-    window: int = 14,
-    price_col: str = "close",
     overbought: float = 70.0,
     oversold: float = 30.0,
     pivot_lookback: int = 5,
@@ -172,7 +163,6 @@ def detect_failure_swings(
     sample_rows: int = 10,
 ) -> Dict[str, Any]:
     return rsi_service.detect_failure_swings(
-        window=window, price_col=price_col,
         overbought=overbought, oversold=oversold,
         pivot_lookback=pivot_lookback,
         symbols=symbols, start=start or _default_start(), end=end,

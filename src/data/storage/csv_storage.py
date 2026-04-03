@@ -16,7 +16,8 @@ _TABLE_COLUMNS: dict[str, list[str]] = {
     "ohlcv": ["symbol", "date", "open", "high", "low", "close", "volume"],
     "dividend": ["symbol", "date", "amount"],
     "asset": ["symbol"],
-    "indicators": ["symbol", "date", "rsi", "macd", "macd_signal", "macd_hist"],
+    "indicator_rsi": ["symbol", "date", "rsi"],
+    "indicator_macd": ["symbol", "date", "macd", "macd_signal", "macd_hist"],
 }
 
 
@@ -70,15 +71,19 @@ class CsvStorage(BaseStorage):
         if path.exists():
             source = f"'{path.as_posix()}'"
             existing = duckdb.sql(f"SELECT * FROM read_csv_auto({source})").df()
+            existing_count = len(existing)
             combined = pd.concat([existing, df], ignore_index=True)
             key_cols = [c for c in ["symbol", "date"] if c in combined.columns]
             if key_cols:
                 combined = combined.drop_duplicates(subset=key_cols, keep="last")
+            new_rows = len(combined) - existing_count
+            logger.info("[UPSERT] %d new row(s) to insert into '%s'.", new_rows, table)
         else:
             combined = df
+            logger.info("[UPSERT] No existing file for '%s' — full insert of %d row(s).", table, len(combined))
         return self._save(combined, table)
 
-    def save_ohlcv(self, df: pd.DataFrame) -> str:
+    def save_ohlcv(self, df: pd.DataFrame, force_insert: bool = False) -> str:
         return self._upsert(df, "ohlcv")
 
     def load_ohlcv(
@@ -106,16 +111,19 @@ class CsvStorage(BaseStorage):
     def load_asset(self, symbols: Optional[List[str]] = None) -> pd.DataFrame:
         return self._load("asset", symbols=symbols)
 
-    def save_indicators(self, df: pd.DataFrame) -> str:
-        return self._upsert(df, "indicators")
+    def save_indicator(self, df: pd.DataFrame, indicator_name: str) -> str:
+        table = f"indicator_{indicator_name}"
+        return self._upsert(df, table)
 
-    def load_indicators(
+    def load_indicator(
         self,
+        indicator_name: str,
         symbols: Optional[List[str]] = None,
         start: Optional[str] = None,
         end: Optional[str] = None,
     ) -> pd.DataFrame:
-        return self._load("indicators", symbols=symbols, start=start, end=end)
+        table = f"indicator_{indicator_name}"
+        return self._load(table, symbols=symbols, start=start, end=end)
 
     def list_symbols(self, table: str = "ohlcv") -> List[str]:
         path = self._path(table)
@@ -158,6 +166,9 @@ class CsvStorage(BaseStorage):
             if not pd.isna(row["last_date"])
         }
 
+    def get_last_indicator_dates(self, indicator_name: str, symbols: List[str]) -> dict:
+        return self.get_last_dates(f"indicator_{indicator_name}", symbols)
+
     def update_indicators(
         self,
         symbols: Optional[List[str]] = None,
@@ -173,11 +184,13 @@ class CsvStorage(BaseStorage):
             return ""
 
         names = indicator_names or list(INDICATOR_REGISTRY.keys())
-        result = compute_indicators(ohlcv, names)
-        if result.empty:
-            logger.warning("Indicator computation produced no rows.")
-            return ""
-
-        saved = self.save_indicators(result)
-        logger.info("Computed and saved %d indicator rows to %s", len(result), saved)
-        return saved
+        saved_paths: list[str] = []
+        for name in names:
+            result = compute_indicators(ohlcv, [name])
+            if result.empty:
+                logger.warning("Indicator '%s' computation produced no rows.", name)
+                continue
+            path = self.save_indicator(result, name)
+            logger.info("Computed and saved %d rows for '%s' to %s", len(result), name, path)
+            saved_paths.append(path)
+        return ", ".join(saved_paths)

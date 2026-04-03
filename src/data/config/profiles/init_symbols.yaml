@@ -48,12 +48,12 @@ dates:
   # Pas de filtre de date (aucune data présente) : on récupère tout l'historique disponible (depuis _DEFAULT_INCREMENTAL_FALLBACK)
   mode: incremental
 
-storage: snowflake
+storage: csv
 
 fetch:
   ohlcv: true
   dividends: false
-  asset_info: true
+  asset_info: false # true
   income_statement: false
 
 # Les indicateurs sont désactivés ici.

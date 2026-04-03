@@ -16,7 +16,11 @@ logger = get_logger(__name__)
 SNOWFLAKE_OHLCV_TABLE = "OHLCV"
 SNOWFLAKE_ASSET_TABLE = "ASSET"
 SNOWFLAKE_DIVIDEND_TABLE = "DIVIDEND"
-SNOWFLAKE_INDICATORS_TABLE = "INDICATORS"
+
+SNOWFLAKE_INDICATOR_TABLES: dict[str, str] = {
+    "rsi": "INDICATOR_RSI",
+    "macd": "INDICATOR_MACD",
+}
 
 SNOWFLAKE_STAGE = "TRADING_STAGE"
 SNOWFLAKE_PARQUET_FORMAT = "PARQUET_FORMAT"
@@ -44,8 +48,8 @@ class SnowflakeStorage(BaseStorage):
         self.schema = schema or config.snowflake_schema
         self.warehouse = warehouse or config.snowflake_warehouse
 
-    def save_ohlcv(self, df: pd.DataFrame) -> str:
-        return self._upsert_data(df, SNOWFLAKE_OHLCV_TABLE)
+    def save_ohlcv(self, df: pd.DataFrame, force_insert: bool = False) -> str:
+        return self._upsert_data(df, SNOWFLAKE_OHLCV_TABLE, force_insert=force_insert)
 
     def load_ohlcv(
         self,
@@ -72,16 +76,19 @@ class SnowflakeStorage(BaseStorage):
     def load_asset(self, symbols: Optional[List[str]] = None) -> pd.DataFrame:
         return self._read_data(SNOWFLAKE_ASSET_TABLE, symbols=symbols)
 
-    def save_indicators(self, df: pd.DataFrame) -> str:
-        return self._upsert_data(df, SNOWFLAKE_INDICATORS_TABLE)
+    def save_indicator(self, df: pd.DataFrame, indicator_name: str) -> str:
+        table = SNOWFLAKE_INDICATOR_TABLES[indicator_name]
+        return self._upsert_data(df, table)
 
-    def load_indicators(
+    def load_indicator(
         self,
+        indicator_name: str,
         symbols: Optional[List[str]] = None,
         start: Optional[str] = None,
         end: Optional[str] = None,
     ) -> pd.DataFrame:
-        return self._read_data(SNOWFLAKE_INDICATORS_TABLE, symbols=symbols, start=start, end=end)
+        table = SNOWFLAKE_INDICATOR_TABLES[indicator_name]
+        return self._read_data(table, symbols=symbols, start=start, end=end)
 
     def list_symbols(self, table: str = "ohlcv") -> List[str]:
         table_name = table.upper()
@@ -96,6 +103,10 @@ class SnowflakeStorage(BaseStorage):
         return latest_dates.get(symbol)
 
     def get_last_dates(self, table: str, symbols: List[str]) -> dict:
+        return self._get_latest_dates(table, symbols)
+
+    def get_last_indicator_dates(self, indicator_name: str, symbols: List[str]) -> dict:
+        table = SNOWFLAKE_INDICATOR_TABLES[indicator_name]
         return self._get_latest_dates(table, symbols)
 
     def update_indicators(
@@ -155,6 +166,19 @@ class SnowflakeStorage(BaseStorage):
         result_data.columns = [column_name.lower() for column_name in result_data.columns]
         return result_data
 
+    def _get_existing_date_pairs(self, table: str, symbols: List[str], min_date, max_date) -> set:
+        if not symbols:
+            return set()
+        placeholders = ", ".join(["%s"] * len(symbols))
+        query = (
+            f"SELECT symbol, date FROM {table} "
+            f"WHERE symbol IN ({placeholders}) AND date >= %s AND date <= %s"
+        )
+        with self._connect() as connection, connection.cursor() as cursor:
+            cursor.execute(query, symbols + [min_date, max_date])
+            rows = cursor.fetchall()
+        return {(row[0], row[1]) for row in rows}
+
     def _get_latest_dates(self, table: str, symbols: List[str]) -> dict[str, str]:
         if not symbols:
             return {}
@@ -168,7 +192,7 @@ class SnowflakeStorage(BaseStorage):
             
         return {row[0]: str(row[1]) for row in results if row[1] is not None}
 
-    def _upsert_data(self, data: pd.DataFrame, table: str) -> str:
+    def _upsert_data(self, data: pd.DataFrame, table: str, force_insert: bool = False) -> str:
         if data.empty:
             logger.info("[UPSERT] No data to upsert into '%s' (empty DataFrame).", table)
             return f"{self.database}.{self.schema}.{table}"
@@ -184,21 +208,38 @@ class SnowflakeStorage(BaseStorage):
         )
 
         if has_date:
-            latest_dates = self._get_latest_dates(table, unique_symbols)
-            if latest_dates:
-                logger.info("[UPSERT] Latest dates in '%s': %s", table, latest_dates)
+            if force_insert:
+                min_date = working_data["date"].min()
+                max_date = working_data["date"].max()
+                existing_pairs = self._get_existing_date_pairs(table, unique_symbols, min_date, max_date)
+                if existing_pairs:
+                    mask = pd.Series(
+                        [
+                            (sym, dt) not in existing_pairs
+                            for sym, dt in zip(working_data["symbol"], working_data["date"])
+                        ],
+                        index=working_data.index,
+                    )
+                    working_data = working_data[mask]
+                    logger.info("[UPSERT] %d new row(s) to insert after excluding existing (symbol, date) pairs.", len(working_data))
+                else:
+                    logger.info("[UPSERT] No existing data found in '%s' for these symbols — full insert.", table)
             else:
-                logger.info("[UPSERT] No existing data found in '%s' for these symbols — full insert.", table)
+                latest_dates = self._get_latest_dates(table, unique_symbols)
+                if latest_dates:
+                    logger.info("[UPSERT] Latest dates in '%s': %s", table, latest_dates)
+                else:
+                    logger.info("[UPSERT] No existing data found in '%s' for these symbols — full insert.", table)
 
-            if latest_dates:
-                working_data["last_date"] = working_data["symbol"].map(latest_dates)
-                working_data["last_date"] = pd.to_datetime(working_data["last_date"]).dt.date
+                if latest_dates:
+                    working_data["last_date"] = working_data["symbol"].map(latest_dates)
+                    working_data["last_date"] = pd.to_datetime(working_data["last_date"]).dt.date
 
-                is_new_symbol = working_data["last_date"].isna()
-                is_recent_date = working_data["date"] > working_data["last_date"]
+                    is_new_symbol = working_data["last_date"].isna()
+                    is_recent_date = working_data["date"] > working_data["last_date"]
 
-                working_data = working_data[is_new_symbol | is_recent_date].drop(columns=["last_date"])
-                logger.info("[UPSERT] %d new row(s) to insert after filtering duplicates.", len(working_data))
+                    working_data = working_data[is_new_symbol | is_recent_date].drop(columns=["last_date"])
+                    logger.info("[UPSERT] %d new row(s) to insert after filtering duplicates.", len(working_data))
         else:
             logger.info("[UPSERT] No date column in '%s' — inserting all rows (symbol-keyed table).", table)
 

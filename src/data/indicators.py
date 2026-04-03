@@ -51,7 +51,7 @@ def compute_indicators(
 
     for name in indicator_names:
         defn = INDICATOR_REGISTRY[name]
-        logger.info("Computing indicator '%s'…", name)
+        logger.debug("Computing indicator '%s' on %d OHLCV rows…", name, len(ohlcv))
         computed = defn.compute(ohlcv)
         for col in defn.columns:
             if col in computed.columns:
@@ -62,5 +62,5 @@ def compute_indicators(
 
     result = result.dropna(subset=all_columns, how="all")
     result = result.sort_values(["symbol", "date"]).reset_index(drop=True)
-    logger.info("Computed %d indicator rows (%s)", len(result), all_columns)
+    logger.debug("compute_indicators: produced %d rows before new-rows filter (%s)", len(result), all_columns)
     return result

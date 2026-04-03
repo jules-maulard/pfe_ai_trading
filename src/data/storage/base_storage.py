@@ -8,7 +8,7 @@ import pandas as pd
 class BaseStorage(ABC):
 
     @abstractmethod
-    def save_ohlcv(self, df: pd.DataFrame) -> str:
+    def save_ohlcv(self, df: pd.DataFrame, force_insert: bool = False) -> str:
         ...
 
     @abstractmethod
@@ -42,12 +42,13 @@ class BaseStorage(ABC):
         ...
 
     @abstractmethod
-    def save_indicators(self, df: pd.DataFrame) -> str:
+    def save_indicator(self, df: pd.DataFrame, indicator_name: str) -> str:
         ...
 
     @abstractmethod
-    def load_indicators(
+    def load_indicator(
         self,
+        indicator_name: str,
         symbols: Optional[List[str]] = None,
         start: Optional[str] = None,
         end: Optional[str] = None,
@@ -65,6 +66,11 @@ class BaseStorage(ABC):
     @abstractmethod
     def get_last_dates(self, table: str, symbols: List[str]) -> dict:
         """Return {symbol: last_date_str} for all given symbols in one query."""
+        ...
+
+    @abstractmethod
+    def get_last_indicator_dates(self, indicator_name: str, symbols: List[str]) -> dict:
+        """Return {symbol: last_date_str} for the given indicator table."""
         ...
 
     @abstractmethod

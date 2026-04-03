@@ -14,7 +14,7 @@ from ..utils import get_logger
 
 logger = get_logger(__name__)
 
-_DEFAULT_INCREMENTAL_FALLBACK = "2026-01-01"
+_DEFAULT_INCREMENTAL_FALLBACK = "2016-01-01"
 
 
 def _build_storage(backend: str) -> BaseStorage:
@@ -71,6 +71,7 @@ def _fetch_ohlcv(
     start_map: Dict[str, Optional[str]],
     end_date: Optional[str],
     storage: BaseStorage,
+    force_insert: bool = False,
 ) -> None:
     groups = _group_symbols_by_start(start_map)
     for start, syms in groups.items():
@@ -85,7 +86,7 @@ def _fetch_ohlcv(
             ohlcv["date"].min() if "date" in ohlcv.columns else "?",
             ohlcv["date"].max() if "date" in ohlcv.columns else "?",
         )
-        storage.save_ohlcv(ohlcv)
+        storage.save_ohlcv(ohlcv, force_insert=force_insert)
         logger.info("OHLCV saved.")
 
 
@@ -123,6 +124,20 @@ def _fetch_asset_info(
         logger.info("Saved %d asset rows.", len(combined))
 
 
+_INDICATOR_LOOKBACK_DAYS = 60
+
+
+def _filter_new_indicator_rows(
+    result: pd.DataFrame,
+    last_dates: Dict[str, str],
+) -> pd.DataFrame:
+    df = result.copy()
+    df["date"] = pd.to_datetime(df["date"]).dt.date
+    df["_last_date"] = pd.to_datetime(df["symbol"].map(last_dates), errors="coerce").dt.date
+    mask = df["_last_date"].isna() | (df["date"] > df["_last_date"])
+    return df[mask].drop(columns=["_last_date"]).reset_index(drop=True)
+
+
 def _compute_and_save_indicators(
     config: PipelineConfig,
     symbols: List[str],
@@ -130,19 +145,60 @@ def _compute_and_save_indicators(
 ) -> None:
     indicator_symbols = config.indicators.symbols or symbols
     logger.info(
-        "Computing indicators %s for %d symbol(s)",
-        config.indicators.compute, len(indicator_symbols),
+        "Computing indicators %s for %d symbol(s) (dates.mode=%s)",
+        config.indicators.compute, len(indicator_symbols), config.dates.mode,
     )
-    ohlcv = storage.load_ohlcv(symbols=indicator_symbols)
-    if ohlcv.empty:
-        logger.warning("No OHLCV data in storage for indicator computation.")
-        return
-    result = compute_indicators(ohlcv, config.indicators.compute)
-    if result.empty:
-        logger.warning("Indicator computation produced no rows.")
-        return
-    storage.save_indicators(result)
-    logger.info("Saved %d indicator rows.", len(result))
+
+    for name in config.indicators.compute:
+        last_indicator_dates = storage.get_last_indicator_dates(name, indicator_symbols)
+        last_ohlcv_dates = storage.get_last_dates("ohlcv", indicator_symbols)
+
+        symbols_to_update = [
+            sym for sym in indicator_symbols
+            if last_ohlcv_dates.get(sym) and (
+                sym not in last_indicator_dates
+                or last_ohlcv_dates[sym][:10] > last_indicator_dates[sym][:10]
+            )
+        ]
+
+        if not symbols_to_update:
+            logger.info("Indicator '%s': all symbols are up-to-date, skipping.", name)
+            continue
+
+        logger.info("Indicator '%s': %d symbol(s) need update: %s", name, len(symbols_to_update), symbols_to_update)
+
+        if config.dates.mode == "incremental":
+            earliest_last = min(
+                datetime.strptime(last_indicator_dates[sym][:10], "%Y-%m-%d")
+                for sym in symbols_to_update
+                if sym in last_indicator_dates
+            ) if any(sym in last_indicator_dates for sym in symbols_to_update) else None
+            ohlcv_start = (
+                (earliest_last - timedelta(days=_INDICATOR_LOOKBACK_DAYS)).strftime("%Y-%m-%d")
+                if earliest_last else None
+            )
+        else:
+            ohlcv_start = None
+
+        ohlcv = storage.load_ohlcv(symbols=symbols_to_update, start=ohlcv_start)
+
+        if ohlcv.empty:
+            logger.warning("No OHLCV data in storage for indicator '%s'.", name)
+            continue
+
+        result = compute_indicators(ohlcv, [name])
+        if result.empty:
+            logger.warning("Indicator '%s' computation produced no rows.", name)
+            continue
+
+        if last_indicator_dates:
+            result = _filter_new_indicator_rows(result, last_indicator_dates)
+
+        if result.empty:
+            logger.info("Indicator '%s': no new rows to insert.", name)
+            continue
+
+        storage.save_indicator(result, name)
 
 
 def run_pipeline(config: PipelineConfig, storage: BaseStorage) -> None:
@@ -173,7 +229,7 @@ def run_pipeline(config: PipelineConfig, storage: BaseStorage) -> None:
         end_date = config.dates.end_date or datetime.now().date().strftime("%Y-%m-%d")
 
         if config.fetch.ohlcv:
-            _fetch_ohlcv(retriever, symbols, start_map, end_date, storage)
+            _fetch_ohlcv(retriever, symbols, start_map, end_date, storage, force_insert=(config.dates.mode == "fixed"))
         if config.fetch.dividends:
             _fetch_dividends(retriever, symbols, storage)
         if config.fetch.asset_info:

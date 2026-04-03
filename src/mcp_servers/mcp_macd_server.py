@@ -53,18 +53,13 @@ def list_symbols() -> Dict[str, Any]:
     description="Compute MACD for symbols from local OHLCV data.",
 )
 def compute_macd_tool(
-    fast: int = 12,
-    slow: int = 26,
-    signal: int = 9,
-    price_col: str = "close",
     symbols: Optional[List[str]] = None,
     start: Optional[str] = None,
     end: Optional[str] = None,
     sample_rows: int = 5,
 ) -> Dict[str, Any]:
     return macd_service.compute(
-        fast=fast, slow=slow, signal=signal,
-        price_col=price_col, symbols=symbols, start=start, end=end,
+        symbols=symbols, start=start, end=end,
         sample_rows=sample_rows,
     )
 
@@ -77,18 +72,13 @@ def compute_macd_tool(
     ),
 )
 def detect_crossovers_tool(
-    fast: int = 12,
-    slow: int = 26,
-    signal: int = 9,
-    price_col: str = "close",
     symbols: Optional[List[str]] = None,
     start: Optional[str] = None,
     end: Optional[str] = None,
     sample_rows: int = 10,
 ) -> Dict[str, Any]:
     return macd_service.detect_crossovers(
-        fast=fast, slow=slow, signal=signal,
-        price_col=price_col, symbols=symbols, start=start, end=end,
+        symbols=symbols, start=start, end=end,
         sample_rows=sample_rows,
     )
 
@@ -102,9 +92,6 @@ def detect_crossovers_tool(
     ),
 )
 def find_divergences_tool(
-    fast: int = 12,
-    slow: int = 26,
-    signal: int = 9,
     price_col: str = "close",
     pivot_lookback: int = 5,
     symbols: Optional[List[str]] = None,
@@ -113,7 +100,6 @@ def find_divergences_tool(
     sample_rows: int = 10,
 ) -> Dict[str, Any]:
     return macd_service.find_divergences(
-        fast=fast, slow=slow, signal=signal,
         price_col=price_col, pivot_lookback=pivot_lookback,
         symbols=symbols, start=start, end=end,
         sample_rows=sample_rows,

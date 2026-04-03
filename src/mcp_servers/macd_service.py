@@ -17,27 +17,16 @@ class MACDService:
 
     def compute(
         self,
-        fast: int = 12,
-        slow: int = 26,
-        signal: int = 9,
-        price_col: str = "close",
         symbols: Optional[List[str]] = None,
         start: Optional[str] = None,
         end: Optional[str] = None,
         sample_rows: int = 5,
     ) -> Dict[str, Any]:
-        logger.debug("compute_macd: fast=%d slow=%d signal=%d symbols=%s start=%s end=%s", fast, slow, signal, symbols, start, end)
-        df = self.storage.load_ohlcv(symbols=symbols, start=start, end=end)
-
-        needed = {"symbol", "date", price_col}
-        missing = needed - set(df.columns)
-        if missing:
-            raise ValueError(f"Missing columns: {sorted(missing)}")
-
-        out = self.compute_macd(df, price_col=price_col, fast=fast, slow=slow, signal=signal)
+        logger.debug("compute_macd: symbols=%s start=%s end=%s", symbols, start, end)
+        df = self.storage.load_indicator("macd", symbols=symbols, start=start, end=end)
 
         result = (
-            out[["symbol", "date", "macd", "macd_signal", "macd_hist"]]
+            df[["symbol", "date", "macd", "macd_signal", "macd_hist"]]
             .dropna(subset=["macd", "macd_signal", "macd_hist"])
             .sort_values(["symbol", "date"])
             .reset_index(drop=True)
@@ -82,10 +71,6 @@ class MACDService:
 
     def detect_crossovers(
         self,
-        fast: int = 12,
-        slow: int = 26,
-        signal: int = 9,
-        price_col: str = "close",
         symbols: Optional[List[str]] = None,
         start: Optional[str] = None,
         end: Optional[str] = None,
@@ -93,8 +78,7 @@ class MACDService:
     ) -> Dict[str, Any]:
         """Detect MACD / signal-line and MACD / zero-line crossovers."""
         logger.debug("detect_crossovers: symbols=%s start=%s end=%s", symbols, start, end)
-        df = self.storage.load_ohlcv(symbols=symbols, start=start, end=end)
-        macd_df = self.compute_macd(df, price_col=price_col, fast=fast, slow=slow, signal=signal)
+        macd_df = self.storage.load_indicator("macd", symbols=symbols, start=start, end=end)
         macd_df = (
             macd_df.dropna(subset=["macd", "macd_signal", "macd_hist"])
             .sort_values(["symbol", "date"])
@@ -156,9 +140,6 @@ class MACDService:
 
     def find_divergences(
         self,
-        fast: int = 12,
-        slow: int = 26,
-        signal: int = 9,
         price_col: str = "close",
         pivot_lookback: int = 5,
         symbols: Optional[List[str]] = None,
@@ -168,17 +149,18 @@ class MACDService:
     ) -> Dict[str, Any]:
         """Detect regular and hidden divergences between price and MACD."""
         logger.debug("find_divergences: symbols=%s start=%s end=%s pivot_lookback=%d", symbols, start, end, pivot_lookback)
-        df = self.storage.load_ohlcv(symbols=symbols, start=start, end=end)
-        macd_df = self.compute_macd(df, price_col=price_col, fast=fast, slow=slow, signal=signal)
-        macd_df = (
-            macd_df.dropna(subset=["macd"])
+        ohlcv_df = self.storage.load_ohlcv(symbols=symbols, start=start, end=end)
+        macd_df = self.storage.load_indicator("macd", symbols=symbols, start=start, end=end)
+        merged = ohlcv_df.merge(macd_df, on=["symbol", "date"], how="inner")
+        merged = (
+            merged.dropna(subset=["macd"])
             .sort_values(["symbol", "date"])
             .reset_index(drop=True)
         )
 
         divergences: list[dict] = []
 
-        for symbol, g in macd_df.groupby("symbol"):
+        for symbol, g in merged.groupby("symbol"):
             g = g.reset_index(drop=True)
             prices = g[price_col].values
             macds = g["macd"].values
