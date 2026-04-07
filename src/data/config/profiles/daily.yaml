@@ -18,3 +18,4 @@ indicators:
   compute:
     - rsi
     - macd
+    - pivot

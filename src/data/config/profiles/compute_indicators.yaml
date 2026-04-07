@@ -5,8 +5,11 @@ symbols:
 
 dates:
   mode: full   # load all available OHLCV history for computation
+  # mode: fixed
+  # start_date: "2026-01-01"
+  # end_date: "2026-04-01"
 
-storage: csv
+storage: snowflake
 
 fetch:
   ohlcv: false
@@ -17,6 +20,6 @@ indicators:
   enabled: true
   compute:
     # - rsi
-    # - macd
-    - pivot
+    - macd
+    # - pivot
   # symbols: null  # null = same symbols as resolved above

@@ -62,7 +62,7 @@ class MACDService:
             ema_fast = g[price_col].ewm(span=fast, adjust=False, min_periods=fast).mean()
             ema_slow = g[price_col].ewm(span=slow, adjust=False, min_periods=slow).mean()
             macd_line = ema_fast - ema_slow
-            signal_line = macd_line.ewm(span=signal, adjust=False, min_periods=signal).mean()
+            signal_line = macd_line.ewm(span=signal, adjust=False).mean()
             g["macd"] = macd_line
             g["macd_signal"] = signal_line
             g["macd_hist"] = macd_line - signal_line

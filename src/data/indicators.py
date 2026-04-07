@@ -66,7 +66,7 @@ def compute_indicators(
             else:
                 logger.warning("Indicator '%s' did not produce column '%s'", name, col)
 
-    result = result.dropna(subset=all_columns, how="all")
+    result = result.dropna(subset=all_columns, how="any")
     result = result.sort_values(["symbol", "date"]).reset_index(drop=True)
     logger.debug("compute_indicators: produced %d rows before new-rows filter (%s)", len(result), all_columns)
     return result
