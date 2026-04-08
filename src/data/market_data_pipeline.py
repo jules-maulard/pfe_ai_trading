@@ -124,7 +124,7 @@ def _fetch_asset_info(
         logger.info("Saved %d asset rows.", len(combined))
 
 
-_INDICATOR_LOOKBACK_DAYS = 60
+_INDICATOR_LOOKBACK_DAYS = 90
 
 
 def _filter_new_indicator_rows(

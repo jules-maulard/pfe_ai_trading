@@ -59,12 +59,17 @@ def compute_indicators(
         defn = INDICATOR_REGISTRY[name]
         logger.debug("Computing indicator '%s' on %d OHLCV rows…", name, len(ohlcv))
         computed = defn.compute(ohlcv)
-        for col in defn.columns:
-            if col in computed.columns:
-                result[col] = computed[col].values
-                all_columns.append(col)
-            else:
-                logger.warning("Indicator '%s' did not produce column '%s'", name, col)
+        available_cols = [col for col in defn.columns if col in computed.columns]
+        missing_cols = [col for col in defn.columns if col not in computed.columns]
+        for col in missing_cols:
+            logger.warning("Indicator '%s' did not produce column '%s'", name, col)
+        if available_cols:
+            result = result.merge(
+                computed[["symbol", "date"] + available_cols],
+                on=["symbol", "date"],
+                how="left",
+            )
+            all_columns.extend(available_cols)
 
     result = result.dropna(subset=all_columns, how="any")
     result = result.sort_values(["symbol", "date"]).reset_index(drop=True)
