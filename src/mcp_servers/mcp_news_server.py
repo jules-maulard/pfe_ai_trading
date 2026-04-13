@@ -46,6 +46,30 @@ def get_recent_news(symbols: List[str], max_articles: int = 3) -> str:
 
     return json.dumps(results, ensure_ascii=False, default=str)
 
+@mcp.tool(
+    name="get_news_details", 
+    description="Fetch detailed news articles (including URLs) for a list of stock symbols."
+)
+def get_news_details(symbols: List[str], max_articles: int = 3) -> str:
+    import json
+
+    results: Dict[str, list] = {}
+
+    for i, symbol in enumerate(symbols):
+        articles = news_retriever.get_news(symbol.upper(), max_articles=max_articles)
+        results[symbol.upper()] = [
+            {
+                "title": a.get("title"),
+                "summary": a.get("summary"),
+                "published_at": a.get("published_at"),
+                "url": a.get("url"),
+            }
+            for a in articles
+        ]
+        if i < len(symbols) - 1:
+            time.sleep(_RATE_LIMIT_DELAY)
+
+    return json.dumps(results, ensure_ascii=False, default=str)
 
 if __name__ == "__main__":
     mcp.run()
