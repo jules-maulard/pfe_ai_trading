@@ -1,0 +1,19 @@
+name: daily_pivot
+
+symbols:
+  source: storage
+
+dates:
+  mode: incremental
+
+storage: snowflake
+
+fetch:
+  ohlcv: false
+  dividends: false
+  asset_info: false
+
+indicators:
+  enabled: true
+  compute:
+    - pivot

@@ -1,0 +1,17 @@
+name: daily_ohlcv
+
+symbols:
+  source: storage
+
+dates:
+  mode: incremental
+
+storage: snowflake
+
+fetch:
+  ohlcv: true
+  dividends: false
+  asset_info: false
+
+indicators:
+  enabled: false
