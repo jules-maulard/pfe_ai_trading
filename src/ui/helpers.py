@@ -3,6 +3,7 @@ import asyncio
 from pathlib import Path
 
 import pandas as pd
+from functools import lru_cache
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
@@ -89,7 +90,12 @@ def load_indicator(name: str, symbols: list[str], start: str, end: str) -> pd.Da
     return get_storage().load_indicator(indicator_name=name.lower(), symbols=symbols, start=start, end=end)
 
 
+@lru_cache(maxsize=1)
 def list_symbols() -> list[str]:
+    """Return list of available OHLCV symbols.
+
+    Cached to avoid expensive storage queries on every Streamlit re-render.
+    """
     try:
         return sorted(get_storage().list_symbols("ohlcv"))
     except Exception:

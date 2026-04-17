@@ -3,10 +3,10 @@ import streamlit as st
 
 def render():
     st.title("📈 AI Trading Assistant")
-    st.markdown("### Bienvenue sur votre assistant de trading propulsé par l'IA")
+    st.markdown("### Bienvenue sur votre assistant de trading")
     st.markdown(
         "Cette application analyse les marchés financiers à l'aide d'agents spécialisés "
-        "et d'indicateurs techniques. Sélectionnez une fonctionnalité ci-dessous ou depuis la barre latérale."
+        "et d'indicateurs techniques. Sélectionnez une fonctionnalité depuis la barre latérale."
     )
 
     st.markdown("---")
