@@ -21,10 +21,10 @@ class LlmClient:
         model_list = self._build_model_list(api_keys, model)
         self._router = Router(
             model_list=model_list,
-            routing_strategy="simple-shuffle",
-            num_retries=max_retries,
+            routing_strategy="least-busy",
+            num_retries=max(max_retries, len(api_keys)),
             retry_after=retry_delay,
-            allowed_fails=len(api_keys),
+            allowed_fails=1,
             cooldown_time=60,
         )
 
