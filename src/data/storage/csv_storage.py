@@ -19,6 +19,29 @@ _TABLE_COLUMNS: dict[str, list[str]] = {
     "indicator_rsi": ["symbol", "date", "rsi"],
     "indicator_macd": ["symbol", "date", "macd", "macd_signal", "macd_hist"],
     "indicator_pivot": ["symbol", "date", "pivot", "r1", "s1", "r2", "s2", "r3", "s3"],
+    "income_statement": [
+        "symbol", "date", "period_type",
+        "total_revenue", "cost_of_revenue", "gross_profit",
+        "operating_income", "operating_expense", "net_income",
+        "ebitda", "eps_basic", "eps_diluted",
+    ],
+    "balance_sheet": [
+        "symbol", "date", "period_type",
+        "total_assets", "total_liabilities", "stockholders_equity",
+        "cash_and_equivalents", "total_debt", "net_debt",
+        "current_assets", "current_liabilities",
+    ],
+    "cash_flow": [
+        "symbol", "date", "period_type",
+        "operating_cash_flow", "investing_cash_flow", "financing_cash_flow",
+        "free_cash_flow", "capital_expenditure",
+    ],
+    "financial_ratios": [
+        "symbol", "date", "period_type",
+        "gross_margin", "operating_margin", "net_margin",
+        "return_on_equity", "return_on_assets",
+        "debt_to_equity", "current_ratio",
+    ],
 }
 
 
@@ -125,6 +148,18 @@ class CsvStorage(BaseStorage):
     ) -> pd.DataFrame:
         table = f"indicator_{indicator_name}"
         return self._load(table, symbols=symbols, start=start, end=end)
+
+    def save_fundamental(self, df: pd.DataFrame, statement_type: str) -> str:
+        return self._upsert(df, statement_type)
+
+    def load_fundamental(
+        self,
+        statement_type: str,
+        symbols: Optional[List[str]] = None,
+        start: Optional[str] = None,
+        end: Optional[str] = None,
+    ) -> pd.DataFrame:
+        return self._load(statement_type, symbols=symbols, start=start, end=end)
 
     def list_symbols(self, table: str = "ohlcv") -> List[str]:
         path = self._path(table)

@@ -74,6 +74,20 @@ class BaseStorage(ABC):
         ...
 
     @abstractmethod
+    def save_fundamental(self, df: pd.DataFrame, statement_type: str) -> str:
+        ...
+
+    @abstractmethod
+    def load_fundamental(
+        self,
+        statement_type: str,
+        symbols: Optional[List[str]] = None,
+        start: Optional[str] = None,
+        end: Optional[str] = None,
+    ) -> pd.DataFrame:
+        ...
+
+    @abstractmethod
     def update_indicators(
         self,
         symbols: Optional[List[str]] = None,

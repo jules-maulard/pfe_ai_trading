@@ -68,3 +68,16 @@ jobs:
         run: pip install -r requirements.txt
       - name: Compute Pivot Points
         run: python -m src.data.market_data_pipeline --profile daily_pivot
+
+  load-fundamentals:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Load Fundamentals data
+        run: python -m src.data.market_data_pipeline --profile daily_fundamentals

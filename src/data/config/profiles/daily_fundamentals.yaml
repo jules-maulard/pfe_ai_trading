@@ -1,0 +1,26 @@
+name: daily_fundamentals
+
+symbols:
+  source: storage
+
+dates:
+  mode: incremental
+
+storage: snowflake
+
+fetch:
+  ohlcv: false
+  dividends: false
+  asset_info: false
+  fundamentals: true
+
+fundamentals:
+  period: annual
+  statements:
+    - income_statement
+    - balance_sheet
+    - cash_flow
+    - financial_ratios
+
+indicators:
+  enabled: false

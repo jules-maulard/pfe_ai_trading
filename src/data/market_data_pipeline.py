@@ -8,7 +8,7 @@ import pandas as pd
 
 from .config.pipeline_config import PipelineConfig, load_profile
 from .indicators import compute_indicators
-from .retrievers import YFinanceRetriever
+from .retrievers import YFinanceRetriever, FundamentalRetriever
 from .storage import BaseStorage
 from ..utils import get_logger
 
@@ -124,6 +124,33 @@ def _fetch_asset_info(
         logger.info("Saved %d asset rows.", len(combined))
 
 
+def _fetch_fundamentals(
+    config: PipelineConfig,
+    symbols: List[str],
+    storage: BaseStorage,
+) -> None:
+    retriever = FundamentalRetriever()
+    period = config.fundamentals.period
+    statement_fetchers = {
+        "income_statement": retriever.get_income_statement,
+        "balance_sheet": retriever.get_balance_sheet,
+        "cash_flow": retriever.get_cash_flow,
+        "financial_ratios": retriever.get_financial_ratios,
+    }
+    for statement_type in config.fundamentals.statements:
+        fetcher = statement_fetchers.get(statement_type)
+        if not fetcher:
+            logger.warning("Unknown fundamental statement type: %s", statement_type)
+            continue
+        logger.info("Fetching %s (%s) for %d symbol(s)", statement_type, period, len(symbols))
+        df = fetcher(symbols, period=period)
+        if df.empty:
+            logger.warning("No %s data returned.", statement_type)
+            continue
+        storage.save_fundamental(df, statement_type)
+        logger.info("Saved %d %s rows.", len(df), statement_type)
+
+
 _INDICATOR_LOOKBACK_DAYS = 90
 
 
@@ -221,6 +248,7 @@ def run_pipeline(config: PipelineConfig, storage: BaseStorage) -> None:
         config.fetch.ohlcv,
         config.fetch.dividends,
         config.fetch.asset_info,
+        config.fetch.fundamentals,
     ])
 
     if has_fetch:
@@ -234,6 +262,8 @@ def run_pipeline(config: PipelineConfig, storage: BaseStorage) -> None:
             _fetch_dividends(retriever, symbols, storage)
         if config.fetch.asset_info:
             _fetch_asset_info(retriever, symbols, storage)
+        if config.fetch.fundamentals:
+            _fetch_fundamentals(config, symbols, storage)
     else:
         logger.info("No data fetch configured — skipping retrieval.")
 

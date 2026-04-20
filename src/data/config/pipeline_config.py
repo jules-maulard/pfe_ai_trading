@@ -45,6 +45,12 @@ class FetchConfig(BaseModel):
     ohlcv: bool = True
     dividends: bool = False
     asset_info: bool = False
+    fundamentals: bool = False
+
+
+class FundamentalsConfig(BaseModel):
+    period: Literal["annual", "quarterly"] = "annual"
+    statements: List[str] = ["income_statement", "balance_sheet", "cash_flow", "financial_ratios"]
 
 
 class IndicatorsConfig(BaseModel):
@@ -59,6 +65,7 @@ class PipelineConfig(BaseModel):
     dates: DatesConfig = DatesConfig()
     storage: Literal["csv", "snowflake"] = "csv"
     fetch: FetchConfig = FetchConfig()
+    fundamentals: FundamentalsConfig = FundamentalsConfig()
     indicators: IndicatorsConfig = IndicatorsConfig()
 
     def resolve_symbols(self) -> List[str]:

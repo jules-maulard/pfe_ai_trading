@@ -23,6 +23,13 @@ SNOWFLAKE_INDICATOR_TABLES: dict[str, str] = {
     "pivot": "INDICATOR_PIVOT",
 }
 
+SNOWFLAKE_FUNDAMENTAL_TABLES: dict[str, str] = {
+    "income_statement": "INCOME_STATEMENT",
+    "balance_sheet": "BALANCE_SHEET",
+    "cash_flow": "CASH_FLOW",
+    "financial_ratios": "FINANCIAL_RATIOS",
+}
+
 SNOWFLAKE_STAGE = "TRADING_STAGE"
 SNOWFLAKE_PARQUET_FORMAT = "PARQUET_FORMAT"
 SNOWFLAKE_INDICATORS_TASK = "TASK_COMPUTE_INDICATORS"
@@ -89,6 +96,20 @@ class SnowflakeStorage(BaseStorage):
         end: Optional[str] = None,
     ) -> pd.DataFrame:
         table = SNOWFLAKE_INDICATOR_TABLES[indicator_name]
+        return self._read_data(table, symbols=symbols, start=start, end=end)
+
+    def save_fundamental(self, df: pd.DataFrame, statement_type: str) -> str:
+        table = SNOWFLAKE_FUNDAMENTAL_TABLES[statement_type]
+        return self._upsert_data(df, table)
+
+    def load_fundamental(
+        self,
+        statement_type: str,
+        symbols: Optional[List[str]] = None,
+        start: Optional[str] = None,
+        end: Optional[str] = None,
+    ) -> pd.DataFrame:
+        table = SNOWFLAKE_FUNDAMENTAL_TABLES[statement_type]
         return self._read_data(table, symbols=symbols, start=start, end=end)
 
     def list_symbols(self, table: str = "ohlcv") -> List[str]:
