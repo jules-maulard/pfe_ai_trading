@@ -6,7 +6,7 @@ import streamlit as st
 ROOT_DIRECTORY = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT_DIRECTORY))
 
-from src.ui.views import home, chat, market_data, about
+from src.ui.views import home, chat, market_data, fundamentals, about
 
 APPLICATION_PAGES = [
     {
@@ -26,6 +26,12 @@ APPLICATION_PAGES = [
         "title": "Market Data", 
         "icon": "📈", 
         "url_path": "market-data"
+    },
+    {
+        "page": fundamentals.render,
+        "title": "Fundamentals",
+        "icon": "🏦",
+        "url_path": "fundamentals"
     },
     {
         "page": about.render, 

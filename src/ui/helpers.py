@@ -22,6 +22,7 @@ AGENTS = {
     "RSI": str(ROOT / "src/agents/configs/rsi.yaml"),
     "Pivot Points": str(ROOT / "src/agents/configs/pivot.yaml"),
     "News": str(ROOT / "src/agents/configs/news.yaml"),
+    "Fundamentals": str(ROOT / "src/agents/configs/fundamentals.yaml"),
 }
 
 INDICATORS = ["RSI", "MACD", "Pivot"]
@@ -100,3 +101,7 @@ def list_symbols() -> list[str]:
         return sorted(get_storage().list_symbols("ohlcv"))
     except Exception:
         return []
+
+
+def load_fundamental(statement_type: str, symbols: list[str], start: str | None = None, end: str | None = None) -> pd.DataFrame:
+    return get_storage().load_fundamental(statement_type=statement_type, symbols=symbols, start=start, end=end)
