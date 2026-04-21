@@ -138,6 +138,16 @@ class Server:
             return json.dumps({"error": str(exc)})
 
     @staticmethod
+    def _round_floats(obj: Any, decimals: int = 4) -> Any:
+        if isinstance(obj, float):
+            return round(obj, decimals)
+        if isinstance(obj, dict):
+            return {k: Server._round_floats(v, decimals) for k, v in obj.items()}
+        if isinstance(obj, list):
+            return [Server._round_floats(v, decimals) for v in obj]
+        return obj
+
+    @staticmethod
     def _extract_tool_result(result) -> str:
         data = result.structured_content or result.data
         if data is None:
@@ -154,5 +164,5 @@ class Server:
         if data is None:
             return json.dumps({"error": "No data returned by tool"})
         if isinstance(data, (dict, list)):
-            return json.dumps(data, ensure_ascii=False, default=str)
+            return json.dumps(Server._round_floats(data), ensure_ascii=False, default=str)
         return str(data)
