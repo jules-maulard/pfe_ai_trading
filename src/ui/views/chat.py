@@ -1,6 +1,6 @@
 import streamlit as st
 
-from src.ui.helpers import AGENTS, ask_agent, run_async
+from src.ui.helpers import AGENTS, ask_agent, build_agent, run_async
 
 
 def render():
@@ -16,14 +16,20 @@ def render():
 
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = []
-    if "current_agent" not in st.session_state:
-        st.session_state.current_agent = agent_name
 
-    if st.session_state.current_agent != agent_name:
+    config_path = AGENTS[agent_name]
+    if st.session_state.get("agent_config") != config_path:
+        old = st.session_state.get("agent_instance")
+        if old is not None:
+            run_async(old.disconnect())
+        with st.spinner("Initializing agent…"):
+            st.session_state.agent_instance = run_async(build_agent(config_path))
+        st.session_state.agent_config = config_path
         st.session_state.chat_history = []
-        st.session_state.current_agent = agent_name
 
-    chat_container = st.container(height=380) # 480
+    agent_instance = st.session_state.agent_instance
+
+    chat_container = st.container(height=380)
     with chat_container:
         for msg in st.session_state.chat_history:
             with st.chat_message(msg["role"]):
@@ -37,11 +43,8 @@ def render():
                 st.markdown(user_input)
             with st.chat_message("assistant"):
                 with st.spinner("Thinking…"):
-                    history_snapshot = st.session_state.chat_history[:-1]
                     try:
-                        response = run_async(
-                            ask_agent(AGENTS[agent_name], history_snapshot, user_input)
-                        )
+                        response = run_async(ask_agent(agent_instance, user_input))
                     except Exception as e:
                         response = f"⚠️ Error: {e}"
                 st.markdown(response)

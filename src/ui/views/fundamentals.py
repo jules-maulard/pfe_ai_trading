@@ -2,7 +2,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from src.ui.helpers import AGENTS, ask_agent, list_symbols, load_fundamental, run_async
+from src.ui.helpers import AGENTS, ask_agent, build_agent, list_symbols, load_fundamental, run_async
 
 STATEMENT_TYPES = ["income_statement", "balance_sheet", "cash_flow", "financial_ratios", "dividends"]
 STATEMENT_LABELS = {
@@ -182,6 +182,16 @@ def render():
                 with st.chat_message(msg["role"]):
                     st.markdown(msg["content"])
 
+        _fund_config = AGENTS["Fundamentals"]
+        if st.session_state.get("fund_agent_config") != _fund_config:
+            _old = st.session_state.get("fund_agent_instance")
+            if _old is not None:
+                run_async(_old.disconnect())
+            with st.spinner("Initializing agent…"):
+                st.session_state.fund_agent_instance = run_async(build_agent(_fund_config))
+            st.session_state.fund_agent_config = _fund_config
+            st.session_state.fund_chat_history = []
+
         user_input = st.chat_input("Ask the Fundamentals agent…", key="fund_chat_input")
         if user_input:
             st.session_state.fund_chat_history.append({"role": "user", "content": user_input})
@@ -190,10 +200,9 @@ def render():
                     st.markdown(user_input)
                 with st.chat_message("assistant"):
                     with st.spinner("Thinking…"):
-                        history_snapshot = st.session_state.fund_chat_history[:-1]
                         try:
                             response = run_async(
-                                ask_agent(AGENTS["Fundamentals"], history_snapshot, user_input)
+                                ask_agent(st.session_state.fund_agent_instance, user_input)
                             )
                         except Exception as e:
                             response = f"⚠️ Error: {e}"

@@ -9,8 +9,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
 from src.data.config.settings import get_storage
-from src.agents.agent_runner import run_from_config
-from src.agents.entities import Configuration, Message
+from src.agents.entities import Configuration
 from src.agents.llm_client import LlmClient
 from src.agents.server import Server
 from src.agents.agent import Agent
@@ -28,24 +27,13 @@ AGENTS = {
 INDICATORS = ["RSI", "MACD", "Pivot"]
 
 
+@lru_cache(maxsize=None)
 def load_yaml(path: str) -> dict:
     import yaml
     return yaml.safe_load(Path(path).read_text(encoding="utf-8"))
 
 
-def run_async(coro):
-    try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            import nest_asyncio
-            nest_asyncio.apply()
-            return loop.run_until_complete(coro)
-        return loop.run_until_complete(coro)
-    except RuntimeError:
-        return asyncio.run(coro)
-
-
-async def ask_agent(config_path: str, history: list[dict], user_input: str) -> str:
+async def build_agent(config_path: str) -> Agent:
     cfg = load_yaml(config_path)
     configuration = Configuration.from_env(
         mcp_server_scripts=cfg.get("mcp_server_scripts", []),
@@ -74,13 +62,24 @@ async def ask_agent(config_path: str, history: list[dict], user_input: str) -> s
         memory=Memory(),
         token_monitor=TokenMonitor(),
     )
+    await agent.connect()
+    return agent
+
+
+def run_async(coro):
     try:
-        await agent.connect()
-        for msg in history:
-            agent._memory.add_message(Message(role=msg["role"], content=msg["content"]))
-        return await agent.chat(user_input)
-    finally:
-        await agent.disconnect()
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            import nest_asyncio
+            nest_asyncio.apply()
+            return loop.run_until_complete(coro)
+        return loop.run_until_complete(coro)
+    except RuntimeError:
+        return asyncio.run(coro)
+
+
+async def ask_agent(agent: Agent, user_input: str) -> str:
+    return await agent.chat(user_input)
 
 
 def load_ohlcv(symbols: list[str], start: str, end: str) -> pd.DataFrame:
