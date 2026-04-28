@@ -36,8 +36,6 @@ class RSIService:
 
         return {
             "status": "ok",
-            "count": int(len(result)),
-            "columns": ["symbol", "date", "rsi"],
             "sample": sample,
         }
 
@@ -111,9 +109,6 @@ class RSIService:
         sample = events[-sample_rows:] if sample_rows > 0 else []
         return {
             "status": "ok",
-            "overbought_threshold": overbought,
-            "oversold_threshold": oversold,
-            "total_events": len(events),
             "sample": sample,
         }
 
@@ -184,7 +179,6 @@ class RSIService:
         sample = divergences[-sample_rows:] if sample_rows > 0 else []
         return {
             "status": "ok",
-            "total_divergences": len(divergences),
             "sample": sample,
         }
 
@@ -365,7 +359,6 @@ class RSIService:
         sample = swings[-sample_rows:] if sample_rows > 0 else []
         return {
             "status": "ok",
-            "total_failure_swings": len(swings),
             "sample": sample,
         }
 

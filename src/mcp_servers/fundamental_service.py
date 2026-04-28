@@ -72,12 +72,11 @@ class FundamentalService:
     ) -> Dict[str, Any]:
         df = self.storage.load_dividend(symbols=symbols)
         if df.empty:
-            return {"status": "ok", "count": 0, "data": []}
+            return {"status": "ok", "data": []}
         df = _round_numeric(df)
         df = _trim(df, limit)
         return {
             "status": "ok",
-            "count": len(df),
             "data": df.to_dict(orient="records"),
         }
 
@@ -101,7 +100,7 @@ class FundamentalService:
     ) -> Dict[str, Any]:
         df = self.storage.load_fundamental(statement_type, symbols=symbols)
         if df.empty:
-            return {"status": "ok", "count": 0, "data": []}
+            return {"status": "ok", "data": []}
 
         if period_type and "period_type" in df.columns:
             df = df[df["period_type"] == period_type]
@@ -115,6 +114,5 @@ class FundamentalService:
         df = _trim(df, limit)
         return {
             "status": "ok",
-            "count": len(df),
             "data": df.to_dict(orient="records"),
         }

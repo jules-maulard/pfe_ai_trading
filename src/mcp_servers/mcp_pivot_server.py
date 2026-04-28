@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Optional
 from fastmcp import FastMCP
 
 from .pivot_service import PivotService
+from ._validation import validate_symbols
 
 mcp = FastMCP("Pivot Tools")
 pivot_service = PivotService()
@@ -66,6 +67,8 @@ def compute_pivots_tool(
     end: Optional[str] = None,
     sample_rows: int = 5,
 ) -> Dict[str, Any]:
+    if err := validate_symbols(symbols):
+        return err
     return _round_floats(pivot_service.compute(
         symbols=symbols, start=start, end=end,
         sample_rows=sample_rows,
@@ -87,11 +90,27 @@ def detect_pivot_interaction_tool(
     end: Optional[str] = None,
     sample_rows: int = 10,
 ) -> Dict[str, Any]:
+    if err := validate_symbols(symbols):
+        return err
     return _round_floats(pivot_service.detect_pivot_interaction(
         proximity_pct=proximity_pct,
         symbols=symbols, start=start, end=end,
         sample_rows=sample_rows,
     ))
+
+
+@mcp.tool(
+    name="get_pivot_context",
+    description=(
+        "Return a compact Pivot Points interpretation guide covering levels, "
+        "interactions and pitfalls. Call this before synthesising any analysis report."
+    ),
+)
+def get_pivot_context() -> Dict[str, Any]:
+    return {
+        "status": "ok",
+        "content": (_PIVOT_RESOURCES_DIR / "pivot_quick_reference.md").read_text(encoding="utf-8"),
+    }
 
 
 # ──────────────────────────────────────────────
@@ -114,6 +133,14 @@ def pivot_interaction_guide() -> str:
     return (_PIVOT_RESOURCES_DIR / "pivot_interaction_guide.md").read_text(encoding="utf-8")
 
 
+@mcp.resource(
+    "pivot://knowledge/quick-reference",
+    description="Compact summary of Pivot Points concepts (levels, interactions, pitfalls). Token-efficient.",
+)
+def pivot_quick_reference() -> str:
+    return (_PIVOT_RESOURCES_DIR / "pivot_quick_reference.md").read_text(encoding="utf-8")
+
+
 # ──────────────────────────────────────────────
 # PROMPTS
 # ──────────────────────────────────────────────
@@ -125,11 +152,11 @@ def pivot_interaction_guide() -> str:
 def full_pivot_analysis_prompt(symbol: str) -> str:
     return (
         f"Perform a comprehensive Pivot Points analysis for {symbol}. Follow these steps:\n"
-        f"1. Call compute_pivots with symbols=['{symbol}'] and sample_rows=20.\n"
-        f"2. Call detect_pivot_interaction with symbols=['{symbol}'].\n"
-        "3. Read relevant knowledge resources to ground your interpretation.\n"
+        f"1. Call compute_pivots with symbols=['{symbol}'] and sample_rows=5.\n"
+        f"2. Call detect_pivot_interaction with symbols=['{symbol}'] and sample_rows=5.\n"
+        "3. Call get_pivot_context to ground your interpretation.\n"
         "4. Synthesise a structured report: current levels, nearby interactions, "
-        "support/resistance bias, and recommendation."
+        "support/resistance bias, and conclusion."
     )
 
 

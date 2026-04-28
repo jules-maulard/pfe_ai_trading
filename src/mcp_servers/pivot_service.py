@@ -63,8 +63,6 @@ class PivotService:
 
         return {
             "status": "ok",
-            "count": int(len(result)),
-            "columns": ["symbol", "date"] + pivot_cols,
             "sample": sample,
         }
 
@@ -119,7 +117,6 @@ class PivotService:
         sample = events[-sample_rows:] if sample_rows > 0 else []
         return {
             "status": "ok",
-            "total_interactions": len(events),
             "sample": sample,
         }
 

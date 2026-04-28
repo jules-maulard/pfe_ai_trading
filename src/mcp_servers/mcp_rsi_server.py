@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Optional
 from fastmcp import FastMCP
 
 from .rsi_service import RSIService
+from ._validation import validate_symbols
 
 mcp = FastMCP("RSI Tools")
 rsi_service = RSIService()
@@ -69,6 +70,8 @@ def compute_rsi(
     end: Optional[str] = None,
     sample_rows: int = 5,
 ) -> Dict[str, Any]:
+    if err := validate_symbols(symbols):
+        return err
     return rsi_service.compute(
         symbols=symbols, start=start or _default_start(), end=end,
         sample_rows=sample_rows,
@@ -90,6 +93,8 @@ def detect_extremes(
     end: Optional[str] = None,
     sample_rows: int = 10,
 ) -> Dict[str, Any]:
+    if err := validate_symbols(symbols):
+        return err
     return rsi_service.detect_extremes(
         overbought=overbought, oversold=oversold,
         symbols=symbols, start=start or _default_start(), end=end,
@@ -113,6 +118,8 @@ def find_divergences(
     end: Optional[str] = None,
     sample_rows: int = 10,
 ) -> Dict[str, Any]:
+    if err := validate_symbols(symbols):
+        return err
     return rsi_service.find_divergences(
         price_col=price_col,
         pivot_lookback=pivot_lookback,
@@ -138,6 +145,8 @@ def analyze_multi_timeframe_rsi(
     start: Optional[str] = None,
     end: Optional[str] = None,
 ) -> Dict[str, Any]:
+    if err := validate_symbols(symbols):
+        return err
     return rsi_service.analyze_multi_timeframe_rsi(
         window=window, price_col=price_col,
         timeframes=timeframes,
@@ -162,12 +171,28 @@ def detect_failure_swings(
     end: Optional[str] = None,
     sample_rows: int = 10,
 ) -> Dict[str, Any]:
+    if err := validate_symbols(symbols):
+        return err
     return rsi_service.detect_failure_swings(
         overbought=overbought, oversold=oversold,
         pivot_lookback=pivot_lookback,
         symbols=symbols, start=start or _default_start(), end=end,
         sample_rows=sample_rows,
     )
+
+
+@mcp.tool(
+    name="get_rsi_context",
+    description=(
+        "Return a compact RSI interpretation guide covering extremes, divergences, "
+        "failure swings and multi-timeframe analysis. Call this before synthesising any analysis report."
+    ),
+)
+def get_rsi_context() -> Dict[str, Any]:
+    return {
+        "status": "ok",
+        "content": (_RSI_RESOURCES_DIR / "rsi_quick_reference.md").read_text(encoding="utf-8"),
+    }
 
 # ──────────────────────────────────────────────
 # RESOURCES
@@ -212,6 +237,14 @@ def rsi_failure_swings() -> str:
 def rsi_multi_timeframe_analysis() -> str:
     return (_RSI_RESOURCES_DIR / "rsi_multi_timeframe_analysis.md").read_text(encoding="utf-8")
 
+
+@mcp.resource(
+    "rsi://knowledge/quick-reference",
+    description="Compact summary of all RSI concepts (extremes, divergences, failure swings, multi-timeframe). Token-efficient."
+)
+def rsi_quick_reference() -> str:
+    return (_RSI_RESOURCES_DIR / "rsi_quick_reference.md").read_text(encoding="utf-8")
+
 # ──────────────────────────────────────────────
 # PROMPTS
 # ──────────────────────────────────────────────
@@ -223,13 +256,13 @@ def rsi_multi_timeframe_analysis() -> str:
 def full_rsi_analysis_prompt(symbol: str) -> str:
     return (
         f"Perform a comprehensive RSI analysis for {symbol}. Follow these steps:\n"
-        f"1. Call compute_rsi with symbols=['{symbol}'].\n"
-        f"2. Call detect_extremes with symbols=['{symbol}'].\n"
-        f"3. Call find_divergences with symbols=['{symbol}'].\n"
-        f"4. Call detect_failure_swings with symbols=['{symbol}'].\n"
+        f"1. Call compute_rsi with symbols=['{symbol}'] and sample_rows=5.\n"
+        f"2. Call detect_extremes with symbols=['{symbol}'] and sample_rows=5.\n"
+        f"3. Call find_divergences with symbols=['{symbol}'] and sample_rows=5.\n"
+        f"4. Call detect_failure_swings with symbols=['{symbol}'] and sample_rows=5.\n"
         f"5. Call analyze_multi_timeframe_rsi with symbols=['{symbol}'] and timeframes=['1D','1W','1ME'].\n"
-        "6. Read relevant knowledge resources to ground your interpretation.\n"
-        "7. Synthesise a structured report: summary, key data, interpretation, recommendation."
+        "6. Call get_rsi_context to ground your interpretation.\n"
+        "7. Synthesise a structured report: summary, key data, interpretation, conclusion."
     )
 
 

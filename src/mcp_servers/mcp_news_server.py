@@ -6,6 +6,7 @@ from typing import Dict, List
 from fastmcp import FastMCP
 
 from ..data.retrievers.news_retriever import NewsRetriever
+from ._validation import validate_symbols
 
 mcp = FastMCP("News Tools")
 news_retriever = NewsRetriever(fetch_body=False)
@@ -28,6 +29,9 @@ def health_check() -> Dict[str, str]:
 )
 def get_recent_news(symbols: List[str], max_articles: int = 3) -> str:
     import json
+
+    if err := validate_symbols(symbols):
+        return json.dumps(err, ensure_ascii=False)
 
     results: Dict[str, list] = {}
 
@@ -52,6 +56,9 @@ def get_recent_news(symbols: List[str], max_articles: int = 3) -> str:
 )
 def get_news_details(symbols: List[str], max_articles: int = 3) -> str:
     import json
+
+    if err := validate_symbols(symbols):
+        return json.dumps(err, ensure_ascii=False)
 
     results: Dict[str, list] = {}
 

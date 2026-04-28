@@ -36,7 +36,6 @@ class MACDService:
 
         return {
             "status": "ok",
-            "count": int(len(result)),
             "columns": ["symbol", "date", "macd", "macd_signal", "macd_hist"],
             "sample": sample,
         }
@@ -134,7 +133,6 @@ class MACDService:
         sample = events[-sample_rows:] if sample_rows > 0 else []
         return {
             "status": "ok",
-            "total_crossovers": len(events),
             "sample": sample,
         }
 
@@ -204,7 +202,6 @@ class MACDService:
         sample = divergences[-sample_rows:] if sample_rows > 0 else []
         return {
             "status": "ok",
-            "total_divergences": len(divergences),
             "sample": sample,
         }
 

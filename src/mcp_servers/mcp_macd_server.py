@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Optional
 from fastmcp import FastMCP
 
 from .macd_service import MACDService
+from ._validation import validate_symbols
 
 mcp = FastMCP("MACD Tools")
 macd_service = MACDService()
@@ -58,6 +59,8 @@ def compute_macd_tool(
     end: Optional[str] = None,
     sample_rows: int = 5,
 ) -> Dict[str, Any]:
+    if err := validate_symbols(symbols):
+        return err
     return macd_service.compute(
         symbols=symbols, start=start, end=end,
         sample_rows=sample_rows,
@@ -77,6 +80,8 @@ def detect_crossovers_tool(
     end: Optional[str] = None,
     sample_rows: int = 10,
 ) -> Dict[str, Any]:
+    if err := validate_symbols(symbols):
+        return err
     return macd_service.detect_crossovers(
         symbols=symbols, start=start, end=end,
         sample_rows=sample_rows,
@@ -99,11 +104,27 @@ def find_divergences_tool(
     end: Optional[str] = None,
     sample_rows: int = 10,
 ) -> Dict[str, Any]:
+    if err := validate_symbols(symbols):
+        return err
     return macd_service.find_divergences(
         price_col=price_col, pivot_lookback=pivot_lookback,
         symbols=symbols, start=start, end=end,
         sample_rows=sample_rows,
     )
+
+
+@mcp.tool(
+    name="get_macd_context",
+    description=(
+        "Return a compact MACD interpretation guide covering crossovers, zero-line, "
+        "histogram and divergences. Call this before synthesising any analysis report."
+    ),
+)
+def get_macd_context() -> Dict[str, Any]:
+    return {
+        "status": "ok",
+        "content": (_MACD_RESOURCES_DIR / "macd_quick_reference.md").read_text(encoding="utf-8"),
+    }
 
 
 # ──────────────────────────────────────────────
@@ -134,6 +155,14 @@ def macd_divergences_guide() -> str:
     return (_MACD_RESOURCES_DIR / "macd_divergences_guide.md").read_text(encoding="utf-8")
 
 
+@mcp.resource(
+    "macd://knowledge/quick-reference",
+    description="Compact summary of all MACD concepts (crossovers, divergences, histogram). Token-efficient, ideal for full analysis prompts.",
+)
+def macd_quick_reference() -> str:
+    return (_MACD_RESOURCES_DIR / "macd_quick_reference.md").read_text(encoding="utf-8")
+
+
 # ──────────────────────────────────────────────
 # PROMPTS
 # ──────────────────────────────────────────────
@@ -145,11 +174,11 @@ def macd_divergences_guide() -> str:
 def full_macd_analysis_prompt(symbol: str) -> str:
     return (
         f"Perform a comprehensive MACD analysis for {symbol}. Follow these steps:\n"
-        f"1. Call compute_macd with symbols=['{symbol}'] and sample_rows=20.\n"
-        f"2. Call detect_crossovers with symbols=['{symbol}'].\n"
-        f"3. Call find_divergences with symbols=['{symbol}'].\n"
-        "4. Read relevant knowledge resources to ground your interpretation.\n"
-        "5. Synthesise a structured report: summary, key data, interpretation, recommendation."
+        f"1. Call compute_macd with symbols=['{symbol}'] and sample_rows=5.\n"
+        f"2. Call detect_crossovers with symbols=['{symbol}'] and sample_rows=5.\n"
+        f"3. Call find_divergences with symbols=['{symbol}'] and sample_rows=5.\n"
+        "4. Call get_macd_context to ground your interpretation.\n"
+        "5. Synthesise a structured report: summary, key data, interpretation, conclusion."
     )
 
 

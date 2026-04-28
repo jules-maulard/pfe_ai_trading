@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Optional
 from fastmcp import FastMCP
 
 from .fundamental_service import FundamentalService
+from ._validation import validate_symbols
 
 mcp = FastMCP("Fundamental Tools")
 fundamental_service = FundamentalService()
@@ -54,6 +55,8 @@ def get_income_statement(
     period_type: Optional[str] = "annual",
     limit: int = 8,
 ) -> Dict[str, Any]:
+    if err := validate_symbols(symbols):
+        return err
     return fundamental_service.get_income_statement(symbols, period_type, limit)
 
 
@@ -69,6 +72,8 @@ def get_balance_sheet(
     period_type: Optional[str] = "annual",
     limit: int = 8,
 ) -> Dict[str, Any]:
+    if err := validate_symbols(symbols):
+        return err
     return fundamental_service.get_balance_sheet(symbols, period_type, limit)
 
 
@@ -84,6 +89,8 @@ def get_cash_flow(
     period_type: Optional[str] = "annual",
     limit: int = 8,
 ) -> Dict[str, Any]:
+    if err := validate_symbols(symbols):
+        return err
     return fundamental_service.get_cash_flow(symbols, period_type, limit)
 
 
@@ -99,6 +106,8 @@ def get_financial_ratios(
     period_type: Optional[str] = "annual",
     limit: int = 8,
 ) -> Dict[str, Any]:
+    if err := validate_symbols(symbols):
+        return err
     return fundamental_service.get_financial_ratios(symbols, period_type, limit)
 
 
@@ -110,6 +119,8 @@ def get_dividends(
     symbols: List[str],
     limit: int = 10,
 ) -> Dict[str, Any]:
+    if err := validate_symbols(symbols):
+        return err
     return fundamental_service.get_dividends(symbols, limit)
 
 
@@ -125,6 +136,8 @@ def get_fundamental_summary(
     symbols: List[str],
     period_type: Optional[str] = "annual",
 ) -> Dict[str, Any]:
+    if err := validate_symbols(symbols):
+        return err
     return fundamental_service.get_fundamental_summary(symbols, period_type)
 
 
