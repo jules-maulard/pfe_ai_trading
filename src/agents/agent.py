@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Any, Dict, List, Tuple
+
+import litellm
 
 from ..utils import get_logger
 logger = get_logger(__name__)
@@ -78,10 +81,32 @@ class Agent:
         self._memory.add_message(Message(role="user", content=user_input))
         _nudge_sent = False
         while True:
-            choice, usage = await self._llm_client.get_response(
-                messages=self._memory.get_history(),
-                tools=self._toolbox.get_openai_tools(),
-            )
+            try:
+                choice, usage = await self._llm_client.get_response(
+                    messages=self._memory.get_history(),
+                    tools=self._toolbox.get_openai_tools(),
+                )
+            except litellm.BadRequestError as exc:
+                msg = str(exc)
+                if "tool call validation failed" in msg.lower() or "Tool call validation failed" in msg:
+                    bad_tool = re.search(r"attempted to call tool '([^']+)'", msg)
+                    bad_name = bad_tool.group(1) if bad_tool else "unknown"
+                    valid_names = [t["function"]["name"] for t in self._toolbox.get_openai_tools()]
+                    logger.warning(
+                        "Model tried invalid tool '%s'. Valid tools: %s. Injecting correction.",
+                        bad_name,
+                        valid_names,
+                    )
+                    self._memory.add_message(Message(
+                        role="user",
+                        content=(
+                            f"The tool '{bad_name}' does not exist. "
+                            f"You must only call tools from this exact list: {valid_names}. "
+                            "Please retry your previous step using the correct tool name."
+                        ),
+                    ))
+                    continue
+                raise
             if usage:
                 self._token_monitor.record(usage.prompt_tokens, usage.completion_tokens)
             assistant_message = choice.message
