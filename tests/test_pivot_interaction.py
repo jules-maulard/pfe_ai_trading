@@ -63,7 +63,7 @@ class TestDetectPivotInteraction:
         pivots = _make_pivot_df([{k: data[k] for k in ("symbol", "date", "pivot", "r1", "r2", "r3", "s1", "s2", "s3")}])
         svc = _service(ohlcv, pivots)
         result = svc.detect_pivot_interaction(proximity_pct=0.5)
-        assert result["total_interactions"] == 0
+        assert result["sample"] == []
 
     def test_result_has_status_ok(self):
         data = _row("X", "2024-01-02", 100.0, 100.0)
@@ -91,4 +91,4 @@ class TestDetectPivotInteraction:
         pivots = pd.DataFrame(columns=pivot_cols)
         svc = _service(ohlcv, pivots)
         result = svc.detect_pivot_interaction()
-        assert result["total_interactions"] == 0
+        assert result["sample"] == []

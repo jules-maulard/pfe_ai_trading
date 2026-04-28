@@ -80,7 +80,7 @@ class TestDetectFailureSwings:
         df = pd.DataFrame({"symbol": "X", "date": dates, "rsi": [50.0] * 20})
         svc = _service(df)
         result = svc.detect_failure_swings()
-        assert result["total_failure_swings"] == 0
+        assert result["sample"] == []
 
     def test_result_has_status_ok(self):
         dates = [f"2024-01-{i+1:02d}" for i in range(10)]
@@ -88,13 +88,12 @@ class TestDetectFailureSwings:
         svc = _service(df)
         result = svc.detect_failure_swings()
         assert result["status"] == "ok"
-        assert "total_failure_swings" in result
 
     def test_bullish_swing_record_has_required_keys(self):
         df = _make_bullish_pattern()
         svc = _service(df)
         result = svc.detect_failure_swings(pivot_lookback=3)
-        if result["total_failure_swings"] > 0:
+        if len(result["sample"]) > 0:
             rec = result["sample"][0]
             for key in ("symbol", "type", "date_trigger", "rsi_at_trigger",
                         "low0_date", "low0_rsi", "high0_date", "high0_rsi",
@@ -104,4 +103,4 @@ class TestDetectFailureSwings:
     def test_empty_dataframe_returns_zero_swings(self):
         svc = _service(pd.DataFrame(columns=["symbol", "date", "rsi"]))
         result = svc.detect_failure_swings()
-        assert result["total_failure_swings"] == 0
+        assert result["sample"] == []

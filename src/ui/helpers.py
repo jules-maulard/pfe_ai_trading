@@ -17,6 +17,7 @@ from src.agents.memory import Memory
 from src.agents.token_monitor import TokenMonitor
 
 AGENTS = {
+    "Orchestrator": str(ROOT / "src/agents/configs/orchestrator.yaml"),
     "MACD": str(ROOT / "src/agents/configs/macd.yaml"),
     "RSI": str(ROOT / "src/agents/configs/rsi.yaml"),
     "Pivot Points": str(ROOT / "src/agents/configs/pivot.yaml"),
@@ -66,16 +67,27 @@ async def build_agent(config_path: str) -> Agent:
     return agent
 
 
+import threading
+
+_bg_loop: asyncio.AbstractEventLoop | None = None
+_bg_thread: threading.Thread | None = None
+_loop_lock = threading.Lock()
+
+
+def _get_bg_loop() -> asyncio.AbstractEventLoop:
+    global _bg_loop, _bg_thread
+    with _loop_lock:
+        if _bg_loop is None or _bg_loop.is_closed():
+            _bg_loop = asyncio.new_event_loop()
+            _bg_thread = threading.Thread(target=_bg_loop.run_forever, daemon=True)
+            _bg_thread.start()
+    return _bg_loop
+
+
 def run_async(coro):
-    try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            import nest_asyncio
-            nest_asyncio.apply()
-            return loop.run_until_complete(coro)
-        return loop.run_until_complete(coro)
-    except RuntimeError:
-        return asyncio.run(coro)
+    loop = _get_bg_loop()
+    future = asyncio.run_coroutine_threadsafe(coro, loop)
+    return future.result()
 
 
 async def ask_agent(agent: Agent, user_input: str) -> str:

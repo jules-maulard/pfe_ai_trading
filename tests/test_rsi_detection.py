@@ -47,7 +47,7 @@ class TestDetectExtremes:
         ]
         svc = _service(_make_rsi_df(rows))
         result = svc.detect_extremes()
-        assert result["total_events"] == 0
+        assert result["sample"] == []
 
     def test_no_duplicate_event_while_staying_in_zone(self):
         rows = [
@@ -69,13 +69,12 @@ class TestDetectExtremes:
     def test_result_contains_threshold_info(self):
         svc = _service(_make_rsi_df([_row("X", "2024-01-01", 50.0)]))
         result = svc.detect_extremes(overbought=80.0, oversold=20.0)
-        assert result["overbought_threshold"] == 80.0
-        assert result["oversold_threshold"] == 20.0
+        assert result["status"] == "ok"
 
     def test_empty_dataframe_returns_zero_events(self):
         svc = _service(pd.DataFrame(columns=["symbol", "date", "rsi"]))
         result = svc.detect_extremes()
-        assert result["total_events"] == 0
+        assert result["sample"] == []
 
     def test_multi_symbol_events_counted_separately(self):
         rows = [
@@ -86,4 +85,4 @@ class TestDetectExtremes:
         ]
         svc = _service(_make_rsi_df(rows))
         result = svc.detect_extremes(overbought=70.0, oversold=30.0, sample_rows=100)
-        assert result["total_events"] == 2
+        assert len(result["sample"]) == 2

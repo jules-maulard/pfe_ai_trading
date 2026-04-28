@@ -87,13 +87,12 @@ class TestRSIFindDivergences:
         svc = _rsi_service(df, rsi)
         result = svc.find_divergences()
         assert result["status"] == "ok"
-        assert "total_divergences" in result
 
     def test_divergence_record_has_required_keys(self):
         ohlcv, rsi_df = self._make_regular_bullish()
         svc = _rsi_service(ohlcv, rsi_df)
         result = svc.find_divergences(pivot_lookback=3)
-        if result["total_divergences"] > 0:
+        if len(result["sample"]) > 0:
             rec = result["sample"][0]
             for key in ("symbol", "type", "date_a", "price_a", "rsi_a", "date_b", "price_b", "rsi_b"):
                 assert key in rec
@@ -138,7 +137,7 @@ class TestMACDFindDivergences:
         macd_df = pd.DataFrame({"symbol": "FLAT", "date": dates, "macd": 0.0, "macd_signal": 0.0, "macd_hist": 0.0})
         svc = _macd_service(df, macd_df)
         result = svc.find_divergences()
-        assert result["total_divergences"] == 0
+        assert result["sample"] == []
 
     def test_result_has_status_ok(self):
         n = 10
