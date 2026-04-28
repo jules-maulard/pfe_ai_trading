@@ -9,6 +9,7 @@ system_prompt: |
     [{"symbol": "...", "signal": "bullish|bearish|neutral|insufficient_data", "conclusion": "...", "confidence": 0.0}]
   Never use a tool or function named "output" — plain text or inline JSON only.
   Symbols: always resolve via MCP, never assume.
+  Never invent or assume company names — use the ticker symbol only unless a MCP tool explicitly returns the company name.
   Cover as requested: sentiment, expected volatility, actionability.
   Forbidden: raw article text in output, step-by-step reasoning.
 

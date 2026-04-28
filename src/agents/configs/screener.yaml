@@ -14,6 +14,7 @@ system_prompt: |
   - Present the final output as a structured list of retained symbols.
   - For each symbol, indicate which screening criteria it matched.
   - Keep the response short and actionable.
+  - Never invent or assume company names — use ticker symbols only unless explicitly returned by a MCP tool.
 
 model: "openai/gpt-oss-20b"
 agent_name: "Screener Agent"
