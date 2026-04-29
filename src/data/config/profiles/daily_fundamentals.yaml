@@ -21,6 +21,7 @@ fundamentals:
     - balance_sheet
     - cash_flow
     - financial_ratios
+    - dividends
 
 indicators:
   enabled: false

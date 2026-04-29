@@ -50,7 +50,7 @@ class FetchConfig(BaseModel):
 
 class FundamentalsConfig(BaseModel):
     period: Literal["annual", "quarterly"] = "annual"
-    statements: List[str] = ["income_statement", "balance_sheet", "cash_flow", "financial_ratios"]
+    statements: List[str] = ["income_statement", "balance_sheet", "cash_flow", "financial_ratios", "dividends"]
 
 
 class IndicatorsConfig(BaseModel):

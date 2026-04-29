@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import time
-from typing import List, Literal
+from typing import List, Literal, Optional
 
 import pandas as pd
 import yfinance as yf
@@ -35,6 +35,10 @@ FINANCIAL_RATIOS_COLUMNS = [
     "gross_margin", "operating_margin", "net_margin",
     "return_on_equity", "return_on_assets",
     "debt_to_equity", "current_ratio",
+]
+
+DIVIDEND_COLUMNS = [
+    "symbol", "date", "amount",
 ]
 
 _INCOME_STMT_MAPPING = {
@@ -148,6 +152,50 @@ class FundamentalRetriever:
         ratios["current_ratio"] = _safe_divide(merged["current_assets"], merged["current_liabilities"])
 
         return ratios[FINANCIAL_RATIOS_COLUMNS].reset_index(drop=True)
+
+    def get_dividends(
+        self,
+        symbols: List[str],
+        start: Optional[str] = None,
+        end: Optional[str] = None,
+    ) -> pd.DataFrame:
+        all_dfs: list[pd.DataFrame] = []
+        for symbol in symbols:
+            logger.info("Fetching dividends for %s", symbol)
+            raw = self._get_dividends_with_retry(symbol)
+            if raw is None or raw.empty:
+                logger.warning("No dividend data for %s", symbol)
+                continue
+            df = pd.DataFrame({"date": pd.to_datetime(raw.index), "amount": raw.values})
+            df.insert(0, "symbol", symbol)
+            if start:
+                df = df[df["date"] >= pd.to_datetime(start)]
+            if end:
+                df = df[df["date"] <= pd.to_datetime(end)]
+            if not df.empty:
+                all_dfs.append(df[DIVIDEND_COLUMNS])
+
+        if not all_dfs:
+            return pd.DataFrame(columns=DIVIDEND_COLUMNS)
+        return pd.concat(all_dfs, ignore_index=True)
+
+    def _get_dividends_with_retry(self, symbol: str):
+        last_exc = None
+        for attempt in range(self.max_retries + 1):
+            try:
+                divs = yf.Ticker(symbol).dividends
+                return divs
+            except Exception as e:
+                last_exc = e
+                if attempt < self.max_retries:
+                    wait = (2 ** attempt) * self.backoff_base
+                    logger.warning(
+                        "Attempt %d/%d failed for %s dividends: %s — retrying in %.1fs",
+                        attempt + 1, self.max_retries + 1, symbol, e, wait,
+                    )
+                    time.sleep(wait)
+        logger.error("Failed to fetch dividends for %s after %d retries: %s", symbol, self.max_retries, last_exc)
+        return None
 
     def _fetch_fundamental(
         self,

@@ -138,6 +138,15 @@ def _fetch_fundamentals(
         "financial_ratios": retriever.get_financial_ratios,
     }
     for statement_type in config.fundamentals.statements:
+        if statement_type == "dividends":
+            logger.info("Fetching dividends for %d symbol(s)", len(symbols))
+            df = retriever.get_dividends(symbols)
+            if df.empty:
+                logger.warning("No dividend data returned.")
+                continue
+            storage.save_dividend(df)
+            logger.info("Saved %d dividend rows.", len(df))
+            continue
         fetcher = statement_fetchers.get(statement_type)
         if not fetcher:
             logger.warning("Unknown fundamental statement type: %s", statement_type)
