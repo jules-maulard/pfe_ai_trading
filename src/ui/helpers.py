@@ -115,4 +115,6 @@ def list_symbols() -> list[str]:
 
 
 def load_fundamental(statement_type: str, symbols: list[str], start: str | None = None, end: str | None = None) -> pd.DataFrame:
+    if statement_type == "dividends":
+        return get_storage().load_dividend(symbols=symbols, start=start, end=end)
     return get_storage().load_fundamental(statement_type=statement_type, symbols=symbols, start=start, end=end)

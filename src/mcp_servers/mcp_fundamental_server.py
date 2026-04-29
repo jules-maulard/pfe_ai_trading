@@ -128,7 +128,8 @@ def get_dividends(
     name="get_fundamental_summary",
     description=(
         "Return a compact summary of all fundamental data (income, balance sheet, "
-        "cash flow, ratios) for given symbols. Limited to 2 rows per statement per symbol. "
+        "cash flow, ratios, dividends) for given symbols. Limited to 2 rows per statement "
+        "and 5 dividend entries per symbol. "
         "Use this for a quick overview before diving into specific statements."
     ),
 )

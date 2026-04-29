@@ -89,6 +89,7 @@ class FundamentalService:
         for stmt in STATEMENT_TYPES:
             result = self._load_statement(stmt, symbols, period_type, limit=2)
             summary[stmt] = result.get("data", [])
+        summary["dividends"] = self.get_dividends(symbols, limit=5).get("data", [])
         return summary
 
     def _load_statement(

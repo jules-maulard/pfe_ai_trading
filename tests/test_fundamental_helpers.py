@@ -1,7 +1,9 @@
+from unittest.mock import MagicMock
+
 import pandas as pd
 import pytest
 
-from src.mcp_servers.fundamental_service import _round_numeric, _trim
+from src.mcp_servers.fundamental_service import FundamentalService, _round_numeric, _trim
 
 
 class TestRoundNumeric:
@@ -68,3 +70,63 @@ class TestTrim:
         df = self._make_df()
         result = _trim(df, limit=2)
         assert list(result.index) == list(range(len(result)))
+
+
+def _mock_storage(dividend_df=None, fundamental_df=None):
+    storage = MagicMock()
+    storage.load_dividend.return_value = dividend_df if dividend_df is not None else pd.DataFrame()
+    storage.load_fundamental.return_value = fundamental_df if fundamental_df is not None else pd.DataFrame()
+    return storage
+
+
+class TestGetDividends:
+    def test_returns_records(self):
+        df = pd.DataFrame({
+            "symbol": ["AAPL", "AAPL"],
+            "date": ["2024-01-15", "2024-04-15"],
+            "amount": [0.24, 0.25],
+        })
+        svc = FundamentalService(storage=_mock_storage(dividend_df=df))
+        result = svc.get_dividends(["AAPL"])
+        assert result["status"] == "ok"
+        assert len(result["data"]) == 2
+        assert result["data"][0]["symbol"] == "AAPL"
+
+    def test_empty_returns_empty_list(self):
+        svc = FundamentalService(storage=_mock_storage())
+        result = svc.get_dividends(["AAPL"])
+        assert result == {"status": "ok", "data": []}
+
+    def test_respects_limit(self):
+        df = pd.DataFrame({
+            "symbol": ["AAPL"] * 5,
+            "date": [f"2024-0{i}-15" for i in range(1, 6)],
+            "amount": [0.24] * 5,
+        })
+        svc = FundamentalService(storage=_mock_storage(dividend_df=df))
+        result = svc.get_dividends(["AAPL"], limit=3)
+        assert len(result["data"]) == 3
+
+
+class TestGetFundamentalSummary:
+    def test_includes_dividends_key(self):
+        div_df = pd.DataFrame({
+            "symbol": ["AAPL"],
+            "date": ["2024-01-15"],
+            "amount": [0.24],
+        })
+        svc = FundamentalService(storage=_mock_storage(dividend_df=div_df))
+        result = svc.get_fundamental_summary(["AAPL"])
+        assert "dividends" in result
+        assert len(result["dividends"]) == 1
+
+    def test_dividends_empty_when_no_data(self):
+        svc = FundamentalService(storage=_mock_storage())
+        result = svc.get_fundamental_summary(["AAPL"])
+        assert result["dividends"] == []
+
+    def test_contains_all_statement_keys(self):
+        svc = FundamentalService(storage=_mock_storage())
+        result = svc.get_fundamental_summary(["AAPL"])
+        for key in ["income_statement", "balance_sheet", "cash_flow", "financial_ratios", "dividends"]:
+            assert key in result
