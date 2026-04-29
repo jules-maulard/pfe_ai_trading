@@ -166,7 +166,7 @@ class FundamentalRetriever:
             if raw is None or raw.empty:
                 logger.warning("No dividend data for %s", symbol)
                 continue
-            df = pd.DataFrame({"date": pd.to_datetime(raw.index), "amount": raw.values})
+            df = pd.DataFrame({"date": pd.to_datetime(raw.index, utc=True).tz_localize(None), "amount": raw.values})
             df.insert(0, "symbol", symbol)
             if start:
                 df = df[df["date"] >= pd.to_datetime(start)]
