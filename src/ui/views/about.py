@@ -38,7 +38,7 @@ streamlit run src/ui/app.py
     with col1:
         st.metric("Indicators", "3")
     with col2:
-        st.metric("MCP Servers", "5")
+        st.metric("MCP Servers", "7")
     with col3:
         try:
             n = len(list_symbols())

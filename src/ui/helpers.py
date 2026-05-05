@@ -1,7 +1,10 @@
+import os
 import sys
 import asyncio
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
+
+import requests as _requests
 
 import pandas as pd
 from functools import lru_cache
@@ -136,6 +139,63 @@ def get_pipeline_last_run_summary() -> str | None:
         else:
             age_text = f"il y a {age} jours"
         return f"{date_str} ({age_text})"
+    except Exception:
+        return None
+
+
+def get_github_actions_summary(
+    owner: str | None = None,
+    repo: str | None = None,
+    token: str | None = None,
+) -> dict | None:
+    """Interroge l'API GitHub pour récupérer le dernier run du workflow CI.
+
+    Lit GITHUB_OWNER, GITHUB_REPO (ou GITHUB_REPOSITORY au format 'owner/repo'),
+    et GITHUB_TOKEN depuis l'environnement. Retourne None si non configuré ou en cas d'erreur.
+    """
+    owner = owner or os.getenv("GITHUB_OWNER")
+    repo = repo or os.getenv("GITHUB_REPO")
+    gh_repo_env = os.getenv("GITHUB_REPOSITORY")
+    if not (owner and repo) and gh_repo_env and "/" in gh_repo_env:
+        owner, repo = gh_repo_env.split("/", 1)
+    if not (owner and repo):
+        return None
+
+    token = token or os.getenv("GITHUB_TOKEN")
+    url = f"https://api.github.com/repos/{owner}/{repo}/actions/runs?per_page=1"
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+        "User-Agent": "pfe-ai-trading/streamlit",
+    }
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+
+    try:
+        resp = _requests.get(url, headers=headers, timeout=5)
+        resp.raise_for_status()
+        data = resp.json()
+        runs = data.get("workflow_runs", [])
+        if not runs:
+            return None
+        run = runs[0]
+        started_raw = run.get("run_started_at") or run.get("created_at")
+        started_dt: datetime | None = None
+        age_days: int | None = None
+        if started_raw:
+            started_dt = datetime.fromisoformat(started_raw.replace("Z", "+00:00"))
+            age_days = (datetime.now(tz=timezone.utc) - started_dt).days
+        return {
+            "conclusion": run.get("conclusion"),
+            "status": run.get("status"),
+            "name": run.get("name"),
+            "started_at": started_dt.strftime("%Y-%m-%d %H:%M UTC") if started_dt else None,
+            "age_days": age_days,
+            "html_url": run.get("html_url"),
+            "run_id": run.get("id"),
+            "owner": owner,
+            "repo": repo,
+        }
     except Exception:
         return None
 
