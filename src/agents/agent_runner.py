@@ -9,7 +9,7 @@ from .entities import Configuration
 from .agent import Agent
 from .cli_interface import CliInterface
 from .llm_client import LlmClient
-from .memory import Memory
+from .memory import LongTermMemory, Memory
 from .server import Server
 from .token_monitor import TokenMonitor
 
@@ -48,8 +48,9 @@ async def run_from_config(config_path: str) -> None:
         configuration=configuration,
         llm_client=llm_client,
         servers=servers,
-        memory=Memory(),
+        memory=Memory(max_tokens=6000),
         token_monitor=TokenMonitor(),
+        long_term_memory=LongTermMemory(),
     )
     try:
         await agent.connect()

@@ -63,6 +63,21 @@ class ToolBox:
             return json.dumps({"error": f"No server found for tool '{fn_name}'"})
         return await server.call_tool(fn_name, fn_args)
 
+    async def execute_tool_by_name(self, fn_name: str, arguments_json: str) -> str:
+        """Execute a tool by name and raw JSON arguments string (used for auto-correction)."""
+        try:
+            fn_args = json.loads(arguments_json)
+        except json.JSONDecodeError:
+            fn_args = {}
+
+        if fn_name == "read_resource":
+            return await self._read_resource(fn_args.get("uri", ""))
+
+        server = self._tool_server_map.get(fn_name)
+        if server is None:
+            return json.dumps({"error": f"No server found for tool '{fn_name}'"})
+        return await server.call_tool(fn_name, fn_args)
+
     async def _read_resource(self, uri: str) -> str:
         for server in self._servers:
             for resource in server.resources:

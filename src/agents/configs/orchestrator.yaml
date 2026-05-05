@@ -12,6 +12,9 @@ system_prompt: |
   - ask_news_analyst: News sentiment analysis (headlines, sentiment scores, volatility).
   - ask_screener: Market screening (volume anomalies, top movers).
 
+  # Important usage
+  - Call tools only by these exact names. Do not append channel markers or suffixes such as '<|channel|>commentary'.
+
   # Workflow
   1. Understand the user's request and determine which sub-agents are relevant.
   2. Delegate each part of the analysis to the appropriate sub-agent(s).

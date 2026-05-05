@@ -10,12 +10,14 @@ from dotenv import load_dotenv
 @dataclass
 class Message:
     role: str
-    content: str
+    content: Optional[str]
     tool_calls: Optional[List[Dict[str, Any]]] = None
     tool_call_id: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
-        data: Dict[str, Any] = {"role": self.role, "content": self.content}
+        # Groq (and OpenAI) require content=null (not "") for tool-calling assistant turns
+        content = self.content if self.content else None
+        data: Dict[str, Any] = {"role": self.role, "content": content}
         if self.tool_calls is not None:
             data["tool_calls"] = self.tool_calls
         if self.tool_call_id is not None:

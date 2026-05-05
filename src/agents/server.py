@@ -125,9 +125,22 @@ class Server:
             if hasattr(result, "messages") and result.messages:
                 parts = []
                 for msg in result.messages:
-                    text = getattr(msg, "text", None)
-                    if text is None and hasattr(msg, "content"):
-                        text = msg.content if isinstance(msg.content, str) else str(msg.content)
+                    content = getattr(msg, "content", None)
+                    if content is None:
+                        continue
+                    # TextContent object: has a .text attribute
+                    if hasattr(content, "text"):
+                        text = content.text
+                    elif isinstance(content, str):
+                        text = content
+                    elif isinstance(content, list):
+                        # list of content parts
+                        text = "\n".join(
+                            part.text if hasattr(part, "text") else str(part)
+                            for part in content
+                        )
+                    else:
+                        text = str(content)
                     if text:
                         parts.append(text)
                 return "\n".join(parts) if parts else str(result)
