@@ -11,3 +11,4 @@ pydantic-settings>=2.0
 snowflake-connector-python
 duckdb
 pyarrow
+plotly>=5.0

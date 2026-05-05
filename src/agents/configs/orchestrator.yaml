@@ -28,5 +28,30 @@ system_prompt: |
   - Use tables when comparing multiple symbols across dimensions.
   - End with a clear recommendation or summary when appropriate.
 
+  # Chart directives
+  When a visual would add value (OHLCV price history, RSI trend, MACD histogram), emit
+  one or more fenced code blocks tagged `chart` containing a single-line JSON directive.
+  The UI fetches the data itself — never embed raw arrays or CSV in your response.
+
+  Supported directive types and required fields:
+
+  ohlcv_chart — candlestick price chart:
+    {"type": "ohlcv_chart", "symbol": "MC.PA", "start": "2024-01-01", "end": "2025-01-01"}
+
+  indicator_series — single indicator line (rsi, macd, pivot):
+    {"type": "indicator_series", "symbol": "MC.PA", "indicator": "rsi", "start": "2024-01-01", "end": "2025-01-01"}
+
+  multi_series — compare an indicator across several symbols:
+    {"type": "multi_series", "title": "RSI comparison", "series": [
+      {"symbol": "MC.PA", "indicator": "rsi", "start": "2024-01-01", "end": "2025-01-01"},
+      {"symbol": "AI.PA", "indicator": "rsi", "start": "2024-01-01", "end": "2025-01-01"}
+    ]}
+
+  Rules:
+  - Place chart directives after the related prose, not inside tables or bullet lists.
+  - Use the exact symbol tickers available in the database (e.g. MC.PA, AI.PA, BNP.PA).
+  - Default to the past 12 months when no date range is specified by the user.
+  - Add an optional "title" field for a human-readable chart title.
+
 model: "openai/gpt-oss-20b" # "groq/compound" or "openai/gpt-oss-20b"
 agent_name: "Orchestrator Agent"

@@ -1,10 +1,18 @@
 import streamlit as st
 
 from src.ui.helpers import AGENTS, ask_agent, build_agent, run_async
+from src.ui.directives import parse_directives, render_directive, strip_directives
 
 
 def _humanize(name: str) -> str:
     return name.replace("_", " ").title()
+
+
+def _render_message(content: str) -> None:
+    directives = parse_directives(content)
+    st.markdown(strip_directives(content) if directives else content)
+    for directive in directives:
+        render_directive(directive)
 
 
 def _run_prompt(agent_instance, prompt_name: str, arguments: dict, chat_container):
@@ -21,7 +29,7 @@ def _run_prompt(agent_instance, prompt_name: str, arguments: dict, chat_containe
                     response = run_async(agent_instance.run_prompt(prompt_name, arguments))
                 except Exception as e:
                     response = f"⚠️ Error: {e}"
-            st.markdown(response)
+            _render_message(response)
     st.session_state.chat_history.append({"role": "assistant", "content": response})
 
 
@@ -98,7 +106,10 @@ def render():
     with chat_container:
         for msg in st.session_state.chat_history:
             with st.chat_message(msg["role"]):
-                st.markdown(msg["content"])
+                if msg["role"] == "assistant":
+                    _render_message(msg["content"])
+                else:
+                    st.markdown(msg["content"])
 
     # ── Handle pending prompt execution ────────────────
     pending = st.session_state.pop("_pending_prompt", None)
@@ -131,7 +142,7 @@ def render():
                             response = run_async(ask_agent(agent_instance, user_input))
                         except Exception as e:
                             response = f"⚠️ Error: {e}"
-                st.markdown(response)
+                _render_message(response)
         st.session_state.chat_history.append({"role": "assistant", "content": response})
 
 
