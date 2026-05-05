@@ -1,5 +1,6 @@
 import sys
 import asyncio
+from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
@@ -112,6 +113,31 @@ def list_symbols() -> list[str]:
         return sorted(get_storage().list_symbols("ohlcv"))
     except Exception:
         return []
+
+
+def get_pipeline_last_run_summary() -> str | None:
+    """Retourne la date OHLCV la plus récente et son âge en jours (proxy du dernier run pipeline)."""
+    try:
+        storage = get_storage()
+        symbols = list_symbols()
+        if not symbols:
+            return None
+        last_dates = storage.get_last_dates("ohlcv", symbols)
+        if not last_dates:
+            return None
+        max_date = max(last_dates.values())
+        date_str = str(max_date)[:10]
+        d = datetime.fromisoformat(date_str).date()
+        age = (datetime.utcnow().date() - d).days
+        if age == 0:
+            age_text = "aujourd'hui"
+        elif age == 1:
+            age_text = "il y a 1 jour"
+        else:
+            age_text = f"il y a {age} jours"
+        return f"{date_str} ({age_text})"
+    except Exception:
+        return None
 
 
 def load_fundamental(statement_type: str, symbols: list[str], start: str | None = None, end: str | None = None) -> pd.DataFrame:

@@ -1,6 +1,6 @@
 import streamlit as st
 
-from src.ui.helpers import list_symbols
+from src.ui.helpers import get_pipeline_last_run_summary, list_symbols
 
 
 def render():
@@ -34,7 +34,7 @@ streamlit run src/ui/app.py
     """)
 
     st.markdown("---")
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
     with col1:
         st.metric("Indicators", "3")
     with col2:
@@ -45,3 +45,19 @@ streamlit run src/ui/app.py
             st.metric("Symbols", n)
         except Exception:
             st.metric("Symbols", "—")
+    with col4:
+        last_run = get_pipeline_last_run_summary()
+        st.metric("Dernière pipeline", last_run or "—")
+
+    st.markdown("---")
+    with st.expander("Symboles disponibles dans le stockage", expanded=False):
+        try:
+            syms = list_symbols()
+            if syms:
+                cols = st.columns(6)
+                for i, sym in enumerate(syms):
+                    cols[i % 6].write(sym)
+            else:
+                st.write("Aucun symbole trouvé.")
+        except Exception as exc:
+            st.write("Erreur :", exc)
