@@ -1,7 +1,14 @@
 import streamlit as st
 
-from src.ui.helpers import AGENTS, ask_agent, build_agent, run_async
+from src.ui.helpers import (
+    AGENTS,
+    ask_agent,
+    build_agent,
+    conversation_store,
+    run_async,
+)
 from src.ui.directives import parse_directives, render_directive, strip_directives
+from src.agents.conversations import PersistentMemory
 
 
 def _humanize(name: str) -> str:
@@ -31,10 +38,14 @@ def _run_prompt(agent_instance, prompt_name: str, arguments: dict, chat_containe
                     response = f"⚠️ Error: {e}"
             _render_message(response)
     st.session_state.chat_history.append({"role": "assistant", "content": response})
+    _persist_if_needed()
 
 
 def render():
     st.header("Agent Chat")
+
+    # ── Conversation history sidebar (discret expander) ────────────
+    _render_conversation_panel()
 
     col1, col2 = st.columns([2, 1])
     with col1:
@@ -51,14 +62,35 @@ def render():
         st.session_state.chat_history = []
 
     config_path = AGENTS[agent_name]
-    if st.session_state.get("agent_config") != config_path:
+    conv_id = st.session_state.get("conversation_id")
+
+    # Rebuild agent when config or conversation changes
+    needs_rebuild = (
+        st.session_state.get("agent_config") != config_path
+        or st.session_state.get("_agent_conv_id") != conv_id
+    )
+    if needs_rebuild:
         old = st.session_state.get("agent_instance")
         if old is not None:
             run_async(old.disconnect())
         with st.spinner("Initializing agent…"):
-            st.session_state.agent_instance = run_async(build_agent(config_path))
+            st.session_state.agent_instance = run_async(build_agent(config_path, conv_id))
         st.session_state.agent_config = config_path
-        st.session_state.chat_history = []
+        st.session_state._agent_conv_id = conv_id
+        # Load chat_history from persistent memory if resuming
+        if conv_id:
+            try:
+                payload = conversation_store.load(conv_id)
+                # Rebuild display history (user/assistant only)
+                st.session_state.chat_history = [
+                    {"role": m["role"], "content": m.get("content") or ""}
+                    for m in payload.get("history", [])
+                    if m["role"] in ("user", "assistant") and m.get("content")
+                ]
+            except FileNotFoundError:
+                st.session_state.chat_history = []
+        else:
+            st.session_state.chat_history = []
         st.session_state.agent_prompts = agent_instance_prompts(st.session_state.agent_instance)
 
     agent_instance = st.session_state.agent_instance
@@ -144,6 +176,7 @@ def render():
                             response = f"⚠️ Error: {e}"
                 _render_message(response)
         st.session_state.chat_history.append({"role": "assistant", "content": response})
+        _persist_if_needed()
 
 
 def agent_instance_prompts(agent) -> list:
@@ -237,3 +270,85 @@ def _cmd_prompts(agent) -> str:
         desc = (prompt.description or "")[:100]
         lines.append(f"- **{prompt.name}**{params}" + (f" — {desc}" if desc else ""))
     return "\n".join(lines)
+
+
+# ── Conversation history panel & helpers ──────────────────────────────────────
+
+def _persist_if_needed() -> None:
+    """Persist conversation to disk if using PersistentMemory."""
+    agent = st.session_state.get("agent_instance")
+    if agent is None:
+        return
+    memory = getattr(agent, "_memory", None)
+    if isinstance(memory, PersistentMemory):
+        memory.persist()
+
+
+def _render_conversation_panel() -> None:
+    """Render a discreet conversation history panel as an expander."""
+    with st.expander("📂 Historique des conversations", expanded=False):
+        conversations = conversation_store.list()
+
+        # New conversation button
+        col_new, col_refresh = st.columns([1, 1])
+        with col_new:
+            if st.button("➕ Nouvelle conversation", use_container_width=True, key="conv_new"):
+                agent_name = st.session_state.get("agent_config", "")
+                conv_id = conversation_store.create(agent_name=agent_name)
+                st.session_state.conversation_id = conv_id
+                st.session_state.chat_history = []
+                st.rerun()
+        with col_refresh:
+            if st.button("🔄", use_container_width=True, key="conv_refresh", help="Rafraîchir"):
+                st.rerun()
+
+        if not conversations:
+            st.caption("Aucune conversation sauvegardée.")
+            return
+
+        current_id = st.session_state.get("conversation_id")
+
+        for conv in conversations:
+            conv_id = conv["id"]
+            name = conv["name"] or f"Conv {conv_id[:6]}"
+            msg_count = conv.get("message_count", 0)
+            is_active = conv_id == current_id
+
+            label = f"{'▶ ' if is_active else ''}{name} ({msg_count} msgs)"
+
+            cols = st.columns([4, 1, 1])
+            with cols[0]:
+                if st.button(
+                    label,
+                    key=f"conv_load_{conv_id}",
+                    use_container_width=True,
+                    disabled=is_active,
+                ):
+                    st.session_state.conversation_id = conv_id
+                    st.session_state._agent_conv_id = None  # force rebuild
+                    st.rerun()
+            with cols[1]:
+                if st.button("✏️", key=f"conv_rename_{conv_id}", help="Renommer"):
+                    st.session_state[f"_renaming_{conv_id}"] = True
+                    st.rerun()
+            with cols[2]:
+                if st.button("🗑", key=f"conv_del_{conv_id}", help="Supprimer"):
+                    conversation_store.delete(conv_id)
+                    if current_id == conv_id:
+                        st.session_state.conversation_id = None
+                        st.session_state.chat_history = []
+                        st.session_state._agent_conv_id = None
+                    st.rerun()
+
+            # Inline rename form
+            if st.session_state.get(f"_renaming_{conv_id}"):
+                new_name = st.text_input(
+                    "Nouveau nom",
+                    value=name,
+                    key=f"conv_rename_input_{conv_id}",
+                )
+                if st.button("OK", key=f"conv_rename_ok_{conv_id}"):
+                    if new_name.strip():
+                        conversation_store.rename(conv_id, new_name.strip())
+                    del st.session_state[f"_renaming_{conv_id}"]
+                    st.rerun()

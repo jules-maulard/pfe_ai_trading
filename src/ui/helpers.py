@@ -18,7 +18,11 @@ from src.agents.llm_client import LlmClient
 from src.agents.server import Server
 from src.agents.agent import Agent
 from src.agents.memory import Memory
+from src.agents.conversations import ConversationStore, PersistentMemory
 from src.agents.token_monitor import TokenMonitor
+
+# Global conversation store (shared across agents)
+conversation_store = ConversationStore()
 
 AGENTS = {
     "Orchestrator": str(ROOT / "src/agents/configs/orchestrator.yaml"),
@@ -38,7 +42,7 @@ def load_yaml(path: str) -> dict:
     return yaml.safe_load(Path(path).read_text(encoding="utf-8"))
 
 
-async def build_agent(config_path: str) -> Agent:
+async def build_agent(config_path: str, conversation_id: str | None = None) -> Agent:
     cfg = load_yaml(config_path)
     configuration = Configuration.from_env(
         mcp_server_scripts=cfg.get("mcp_server_scripts", []),
@@ -60,11 +64,22 @@ async def build_agent(config_path: str) -> Agent:
         )
         for s in configuration.mcp_server_scripts
     ]
+
+    # Use persistent memory if a conversation_id is provided
+    if conversation_id:
+        memory = PersistentMemory.from_existing(
+            store=conversation_store,
+            conversation_id=conversation_id,
+            system_prompt=configuration.system_prompt,
+        )
+    else:
+        memory = Memory()
+
     agent = Agent(
         configuration=configuration,
         llm_client=llm_client,
         servers=servers,
-        memory=Memory(),
+        memory=memory,
         token_monitor=TokenMonitor(),
     )
     await agent.connect()
