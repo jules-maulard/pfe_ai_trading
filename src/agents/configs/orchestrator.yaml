@@ -27,6 +27,7 @@ system_prompt: |
   - Keep the final synthesis concise and actionable.
   - Use tables when comparing multiple symbols across dimensions.
   - End with a clear recommendation or summary when appropriate.
+  - Never use `<br>` tags; they are not rendered in Markdown. Use blank lines or standard Markdown line breaks instead.
 
   # Chart directives
   When a visual would add value (OHLCV price history, RSI trend, MACD histogram), emit
