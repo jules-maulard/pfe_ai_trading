@@ -109,8 +109,28 @@ def run_async(coro):
     return future.result()
 
 
+def run_async_background(coro):
+    """Submit *coro* to the background event loop and return a Future (non-blocking)."""
+    loop = _get_bg_loop()
+    return asyncio.run_coroutine_threadsafe(coro, loop)
+
+
 async def ask_agent(agent: Agent, user_input: str) -> str:
     return await agent.chat(user_input)
+
+
+async def ask_agent_with_progress(agent: Agent, user_input: str, progress_queue) -> str:
+    """Run agent.chat() with a progress callback that feeds a threading.Queue."""
+    def _cb(event: dict):
+        progress_queue.put(event)
+    return await agent.chat(user_input, progress_callback=_cb)
+
+
+async def run_prompt_with_progress(agent: Agent, prompt_name: str, arguments: dict, progress_queue) -> str:
+    """Run agent.run_prompt() with a progress callback that feeds a threading.Queue."""
+    def _cb(event: dict):
+        progress_queue.put(event)
+    return await agent.run_prompt(prompt_name, arguments, progress_callback=_cb)
 
 
 def load_ohlcv(symbols: list[str], start: str, end: str) -> pd.DataFrame:

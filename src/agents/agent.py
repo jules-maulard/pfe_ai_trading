@@ -92,13 +92,20 @@ class Agent:
             await server.disconnect()
 
 
-    async def chat(self, user_input: str) -> str:
+    async def chat(self, user_input: str, progress_callback=None) -> str:
+        def _emit(event_type: str, label: str) -> None:
+            if progress_callback is not None:
+                progress_callback({"type": event_type, "label": label})
+
         self._memory.add_message(Message(role="user", content=user_input))
         _nudge_count = 0
         _max_nudges = 3
+        _llm_call_num = 0
         while True:
             await self._maybe_compress_context()
             tools = self._toolbox.get_openai_tools()
+            _llm_call_num += 1
+            _emit("llm_call", f"🤔 Thinking… (LLM call #{_llm_call_num})")
             try:
                 choice, usage = await self._llm_client.get_response(
                     messages=self._memory.get_history(),
@@ -218,6 +225,7 @@ class Agent:
                         ),
                     ))
                     continue
+                _emit("synthesis", "✍️ Writing response…")
                 # Fire fact extraction in background — does not block return or burn tokens synchronously
                 asyncio.ensure_future(self._extract_and_store_facts(content))
                 # Compact tool-call scaffolding so future turns see clean Q&A context
@@ -227,6 +235,8 @@ class Agent:
                 return content
 
             for tool_call in assistant_message.tool_calls:
+                tool_name = tool_call.function.name
+                _emit("tool_call", f"🔧 Calling: {tool_name}")
                 tool_result = await self._toolbox.execute_tool_call(tool_call)
                 # Truncate large tool results to prevent context overflow which causes
                 # the model to leak reasoning tokens into subsequent tool call arguments
@@ -236,13 +246,14 @@ class Agent:
                     content=tool_result,
                     tool_call_id=tool_call.id,
                 ))
+                _emit("tool_done", f"✅ {tool_name} done")
 
-    async def run_prompt(self, prompt_name: str, arguments: Dict[str, Any] | None = None) -> str:
+    async def run_prompt(self, prompt_name: str, arguments: Dict[str, Any] | None = None, progress_callback=None) -> str:
         for server in self._servers:
             for prompt in server.prompts:
                 if prompt.name == prompt_name:
                     prompt_text = await server.get_prompt(prompt_name, arguments)
-                    return await self.chat(prompt_text)
+                    return await self.chat(prompt_text, progress_callback=progress_callback)
         return json.dumps({"error": f"Prompt not found: {prompt_name}"})
 
     async def reset_conversation(self) -> None:

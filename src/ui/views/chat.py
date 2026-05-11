@@ -1,11 +1,17 @@
+import queue
+import time
+
 import streamlit as st
 
 from src.ui.helpers import (
     AGENTS,
     ask_agent,
+    ask_agent_with_progress,
     build_agent,
     conversation_store,
     run_async,
+    run_async_background,
+    run_prompt_with_progress,
 )
 from src.ui.directives import parse_directives, render_directive, strip_directives
 from src.agents.conversations import PersistentMemory
@@ -22,6 +28,60 @@ def _render_message(content: str) -> None:
         render_directive(directive)
 
 
+def _run_with_progress(
+    agent_instance,
+    user_input: str | None = None,
+    prompt_name: str | None = None,
+    prompt_args: dict | None = None,
+) -> str:
+    """Execute an agent call with a live st.status() progress panel.
+
+    Exactly one of *user_input* (free chat) or *prompt_name* (prompt run)
+    should be provided.
+    """
+    progress_q: queue.Queue = queue.Queue()
+
+    if prompt_name is not None:
+        future = run_async_background(
+            run_prompt_with_progress(agent_instance, prompt_name, prompt_args or {}, progress_q)
+        )
+    else:
+        future = run_async_background(
+            ask_agent_with_progress(agent_instance, user_input, progress_q)
+        )
+
+    with st.status("Agent is working…", expanded=True) as status:
+        steps: list[str] = []
+        while not future.done():
+            try:
+                event = progress_q.get(timeout=0.25)
+                label = event.get("label", "")
+                steps.append(label)
+                status.update(label=label)
+                st.write(label)
+            except queue.Empty:
+                pass
+
+        # Drain any remaining events produced after future.done() but before we polled
+        while not progress_q.empty():
+            try:
+                event = progress_q.get_nowait()
+                label = event.get("label", "")
+                steps.append(label)
+                st.write(label)
+            except queue.Empty:
+                break
+
+        try:
+            response = future.result()
+            status.update(label="Done ✅", state="complete", expanded=False)
+        except Exception as e:
+            response = f"⚠️ Error: {e}"
+            status.update(label="Error ❌", state="error", expanded=False)
+
+    return response
+
+
 def _run_prompt(agent_instance, prompt_name: str, arguments: dict, chat_container):
     arg_str = " ".join(f"{k}={v}" for k, v in arguments.items())
     display = f"📋 `{prompt_name}`" + (f" ({arg_str})" if arg_str else "")
@@ -31,11 +91,11 @@ def _run_prompt(agent_instance, prompt_name: str, arguments: dict, chat_containe
         with st.chat_message("user"):
             st.markdown(display)
         with st.chat_message("assistant"):
-            with st.spinner("Running prompt…"):
-                try:
-                    response = run_async(agent_instance.run_prompt(prompt_name, arguments))
-                except Exception as e:
-                    response = f"⚠️ Error: {e}"
+            response = _run_with_progress(
+                agent_instance,
+                prompt_name=prompt_name,
+                prompt_args=arguments,
+            )
             _render_message(response)
     st.session_state.chat_history.append({"role": "assistant", "content": response})
     _persist_if_needed()
@@ -169,11 +229,7 @@ def render():
                 elif cmd == "/prompts":
                     response = _cmd_prompts(agent_instance)
                 else:
-                    with st.spinner("Thinking…"):
-                        try:
-                            response = run_async(ask_agent(agent_instance, user_input))
-                        except Exception as e:
-                            response = f"⚠️ Error: {e}"
+                    response = _run_with_progress(agent_instance, user_input=user_input)
                 _render_message(response)
         st.session_state.chat_history.append({"role": "assistant", "content": response})
         _persist_if_needed()
