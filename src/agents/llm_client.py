@@ -33,7 +33,7 @@ class LlmClient:
         messages: List[Dict[str, Any]],
         tools: List[Dict[str, Any]] | None = None,
     ):
-        kwargs: Dict[str, Any] = {"model": self._model, "messages": messages}
+        kwargs: Dict[str, Any] = {"model": self._model, "messages": messages, "temperature": 0.0}
         if tools:
             kwargs["tools"] = tools
             kwargs["tool_choice"] = "auto"

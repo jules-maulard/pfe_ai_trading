@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Any, Dict, List
 
 from ..utils import get_logger
@@ -49,7 +50,7 @@ class ToolBox:
         return [tool.to_openai_format() for tool in self._tools]
 
     async def execute_tool_call(self, tool_call) -> str:
-        fn_name = tool_call.function.name
+        fn_name = re.sub(r"(?:<|\\u003[Cc])\|channel\|(?:>|\\u003[Ee]).*$", "", tool_call.function.name).strip()
         try:
             fn_args = json.loads(tool_call.function.arguments)
         except json.JSONDecodeError:

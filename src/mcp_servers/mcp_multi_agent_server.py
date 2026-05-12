@@ -168,8 +168,8 @@ def deep_symbol_analysis_prompt(symbol: str) -> str:
 def daily_investment_pick_prompt() -> str:
     return (
         "The user wants to know what to invest in today. Follow this workflow:\n\n"
-        "1. **Screen the market** — Ask ask_screener: 'Run a daily screening: get top 10 movers and volume anomalies with limit=10.'\n"
-        "2. **Select candidates** — From the screener output, pick the top 3-5 symbols showing both price movement AND volume confirmation.\n"
+        "1. **Screen the market** — Ask ask_screener: 'Run a daily screening: get top 3 movers and volume anomalies with limit=3.'\n"
+        "2. **Select candidates** — From the screener output, pick the top 2-3 symbols showing both price movement AND volume confirmation.\n"
         "3. **Technical check** — For each selected symbol:\n"
         "   a. Ask ask_macd_analyst: 'Is the MACD momentum bullish for {symbol}? Detect recent crossovers.'\n"
         "   b. Ask ask_rsi_analyst: 'Is RSI in a favorable zone for {symbol}? Check for extremes and divergences.'\n"

@@ -106,7 +106,8 @@ def detect_pivot_interaction_tool(
         "interactions and pitfalls. Call this before synthesising any analysis report."
     ),
 )
-def get_pivot_context() -> Dict[str, Any]:
+def get_pivot_context(uri: str | None = None) -> Dict[str, Any]:
+    """uri is accepted but ignored — kept for model compatibility."""
     return {
         "status": "ok",
         "content": (_PIVOT_RESOURCES_DIR / "pivot_quick_reference.md").read_text(encoding="utf-8"),
@@ -154,7 +155,7 @@ def full_pivot_analysis_prompt(symbol: str) -> str:
         f"Perform a comprehensive Pivot Points analysis for {symbol}. Follow these steps:\n"
         f"1. Call compute_pivots with symbols=['{symbol}'] and sample_rows=5.\n"
         f"2. Call detect_pivot_interaction with symbols=['{symbol}'] and sample_rows=5.\n"
-        "3. Call get_pivot_context to ground your interpretation.\n"
+        "3. Call get_pivot_context() with NO arguments to ground your interpretation.\n"
         "4. Synthesise a structured report: current levels, nearby interactions, "
         "support/resistance bias, and conclusion."
     )

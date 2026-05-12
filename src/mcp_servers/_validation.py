@@ -34,7 +34,7 @@ def validate_symbols(
         return None
 
     available = _load_available_symbols()
-    invalid = [s for s in symbols if s not in available]
+    invalid = [s for s in symbols if s.upper() not in available]
     if invalid:
         return {
             "status": "error",

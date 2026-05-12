@@ -188,7 +188,8 @@ def detect_failure_swings(
         "failure swings and multi-timeframe analysis. Call this before synthesising any analysis report."
     ),
 )
-def get_rsi_context() -> Dict[str, Any]:
+def get_rsi_context(uri: str | None = None) -> Dict[str, Any]:
+    """uri is accepted but ignored — kept for model compatibility."""
     return {
         "status": "ok",
         "content": (_RSI_RESOURCES_DIR / "rsi_quick_reference.md").read_text(encoding="utf-8"),
@@ -261,7 +262,7 @@ def full_rsi_analysis_prompt(symbol: str) -> str:
         f"3. Call find_divergences with symbols=['{symbol}'] and sample_rows=5.\n"
         f"4. Call detect_failure_swings with symbols=['{symbol}'] and sample_rows=5.\n"
         f"5. Call analyze_multi_timeframe_rsi with symbols=['{symbol}'] and timeframes=['1D','1W','1ME'].\n"
-        "6. Call get_rsi_context to ground your interpretation.\n"
+        "6. Call get_rsi_context() with NO arguments to ground your interpretation.\n"
         "7. Synthesise a structured report: summary, key data, interpretation, conclusion."
     )
 

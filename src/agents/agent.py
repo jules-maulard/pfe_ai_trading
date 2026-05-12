@@ -101,6 +101,8 @@ class Agent:
         _nudge_count = 0
         _max_nudges = 3
         _llm_call_num = 0
+        _parse_fail_count = 0
+        _max_parse_fails = 3
         while True:
             await self._maybe_compress_context()
             tools = self._toolbox.get_openai_tools()
@@ -111,11 +113,17 @@ class Agent:
                     messages=self._memory.get_history(),
                     tools=tools,
                 )
-            except litellm.RateLimitError as exc:
-                wait = self._parse_retry_after(str(exc))
-                logger.warning(
-                    "Rate limit hit — waiting %.1fs before retry (TPM limit)", wait
-                )
+            except (litellm.RateLimitError, litellm.ServiceUnavailableError) as exc:
+                msg_exc = str(exc)
+                wait = self._parse_retry_after(msg_exc)
+                if "no deployments available" in msg_exc.lower():
+                    logger.warning(
+                        "No deployments available — waiting %.1fs before retry", wait
+                    )
+                else:
+                    logger.warning(
+                        "Rate limit hit — waiting %.1fs before retry (TPM limit)", wait
+                    )
                 await asyncio.sleep(wait)
                 continue
             except litellm.BadRequestError as exc:
@@ -141,7 +149,63 @@ class Agent:
                 # Model produced unparseable output (usually context overflow).
                 # Do NOT disable tools — just retry; the model should self-correct.
                 if "parsing failed" in msg.lower() or "output_parse_failed" in msg.lower():
-                    logger.warning("Model output parsing failed — retrying with tools still enabled.")
+                    _parse_fail_count += 1
+                    try:
+                        outer_match = re.search(r"GroqException - (\{.*\})", msg, re.DOTALL)
+                        if outer_match:
+                            outer = json.loads(outer_match.group(1))
+                            fg = outer.get("error", {}).get("failed_generation", "")
+                            if fg:
+                                logger.debug("failed_generation snippet: %s", fg[:300])
+                    except Exception:
+                        pass
+                    if _parse_fail_count >= _max_parse_fails:
+                        logger.warning(
+                            "Repeated parse failures (%d) — falling back to tool-free call.",
+                            _parse_fail_count,
+                        )
+                        try:
+                            fallback_msgs = self._memory.get_history()
+                            fallback_msgs = [
+                                m if isinstance(m, dict) else m
+                                for m in fallback_msgs
+                            ]
+                            fallback_msgs.append({
+                                "role": "user",
+                                "content": (
+                                    "You have failed to produce a parseable response multiple times. "
+                                    "Do NOT call any tools. "
+                                    "Write your best analysis and recommendation based on data already gathered above."
+                                ),
+                            })
+                            fb_choice, fb_usage = await self._llm_client.get_response(
+                                messages=fallback_msgs
+                            )
+                            if fb_usage:
+                                self._token_monitor.record(
+                                    fb_usage.prompt_tokens, fb_usage.completion_tokens
+                                )
+                            fb_content = (fb_choice.message.content or "").strip()
+                            if fb_content:
+                                _parse_fail_count = 0
+                                return fb_content
+                        except Exception as fb_exc:
+                            logger.warning("Fallback call failed: %s", fb_exc)
+                        _parse_fail_count = 0
+                        continue
+                    logger.warning(
+                        "Model output parsing failed (attempt %d/%d) — injecting format reminder.",
+                        _parse_fail_count,
+                        _max_parse_fails,
+                    )
+                    self._memory.add_message(Message(
+                        role="user",
+                        content=(
+                            "Your previous response could not be parsed. "
+                            "Return ONLY a valid tool call or plain text — "
+                            "no reasoning traces, no markdown fences, no extra tokens."
+                        ),
+                    ))
                     continue
                 # ── tool call validation failed (wrong tool name) ────────────────
                 if "tool call validation failed" in msg.lower() or "Tool call validation failed" in msg:
@@ -166,19 +230,34 @@ class Agent:
                                 fg_raw = outer.get("error", {}).get("failed_generation", "")
                                 if fg_raw:
                                     fg_obj = json.loads(fg_raw)
-                                    args_str = json.dumps(fg_obj.get("arguments", {}))
+                                    fn_args = fg_obj.get("arguments", {})
+                                    # Normalise symbol casing to uppercase so the
+                                    # service layer resolves them correctly (e.g. AIR.Pa → AIR.PA)
+                                    if "symbols" in fn_args and isinstance(fn_args["symbols"], list):
+                                        fn_args["symbols"] = [s.upper() for s in fn_args["symbols"]]
+                                    args_str = json.dumps(fn_args)
                         except Exception as parse_exc:
                             logger.debug("Could not parse failed_generation args: %s", parse_exc)
                         tool_result = await self._toolbox.execute_tool_by_name(corrected, args_str)
-                        # Inject as if the model had called the correct tool
+                        # Inject a structurally correct assistant + tool pair so the
+                        # LLM sees the call as already completed and does not repeat it.
+                        fake_call_id = f"auto_{corrected}"
                         self._memory.add_message(Message(
                             role="assistant",
-                            content=f"[Auto-corrected tool call: {corrected}]",
+                            content=None,
+                            tool_calls=[{
+                                "id": fake_call_id,
+                                "type": "function",
+                                "function": {
+                                    "name": corrected,
+                                    "arguments": args_str,
+                                },
+                            }],
                         ))
                         self._memory.add_message(Message(
                             role="tool",
                             content=tool_result,
-                            tool_call_id=f"auto_{corrected}",
+                            tool_call_id=fake_call_id,
                         ))
                         continue
 
@@ -236,6 +315,9 @@ class Agent:
 
             for tool_call in assistant_message.tool_calls:
                 tool_name = tool_call.function.name
+                # Strip any model-injected channel tags (e.g. "tool<|channel|>suffix")
+                # that can appear in both plain and JSON-escaped form.
+                tool_name = re.sub(r"(?:<|\\u003[Cc])\|channel\|(?:>|\\u003[Ee]).*$", "", tool_name).strip()
                 _emit("tool_call", f"🔧 Calling: {tool_name}")
                 tool_result = await self._toolbox.execute_tool_call(tool_call)
                 # Truncate large tool results to prevent context overflow which causes
@@ -296,23 +378,19 @@ class Agent:
         return default
 
     @staticmethod
-    def _truncate_tool_result(result: str, max_chars: int = 3000) -> str:
-        """Truncate tool results to avoid context overflow.
-
-        Without truncation, 4-5 verbose sub-agent responses can fill the context
-        window and cause the model to leak reasoning tokens into subsequent tool
-        call arguments, producing unparseable JSON.
-        """
+    def _truncate_tool_result(result: str, max_chars: int = 1500) -> str:
         if len(result) <= max_chars:
             return result
-        return result[:max_chars] + "\n[...response truncated for context budget...]"
+        return result[:max_chars] + "\n[...truncated...]"
 
     @staticmethod
     def _fuzzy_match_tool(bad_name: str, valid_names: List[str], threshold: float = 0.75) -> str | None:
         """Return the closest valid tool name if similarity exceeds threshold, else None."""
         from difflib import SequenceMatcher
-        # Strip common model artifacts first
-        clean = re.sub(r"<\|channel\|>.*$", "", bad_name).strip()
+        # Strip common model artifacts first.
+        # The error message from Groq may contain JSON-escaped angle brackets
+        # (e.g. \u003c for < and \u003e for >) so we match both forms.
+        clean = re.sub(r"(?:<|\\u003[Cc])\|channel\|(?:>|\\u003[Ee]).*$", "", bad_name).strip()
         # Exact match after cleanup?
         if clean in valid_names:
             return clean

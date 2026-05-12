@@ -120,7 +120,8 @@ def find_divergences_tool(
         "histogram and divergences. Call this before synthesising any analysis report."
     ),
 )
-def get_macd_context() -> Dict[str, Any]:
+def get_macd_context(uri: str | None = None) -> Dict[str, Any]:
+    """uri is accepted but ignored — kept for model compatibility."""
     return {
         "status": "ok",
         "content": (_MACD_RESOURCES_DIR / "macd_quick_reference.md").read_text(encoding="utf-8"),
@@ -177,7 +178,7 @@ def full_macd_analysis_prompt(symbol: str) -> str:
         f"1. Call compute_macd with symbols=['{symbol}'] and sample_rows=5.\n"
         f"2. Call detect_crossovers with symbols=['{symbol}'] and sample_rows=5.\n"
         f"3. Call find_divergences with symbols=['{symbol}'] and sample_rows=5.\n"
-        "4. Call get_macd_context to ground your interpretation.\n"
+        "4. Call get_macd_context() with NO arguments to ground your interpretation.\n"
         "5. Synthesise a structured report: summary, key data, interpretation, conclusion."
     )
 
