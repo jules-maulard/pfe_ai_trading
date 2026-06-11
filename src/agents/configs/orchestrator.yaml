@@ -12,6 +12,40 @@ system_prompt: |
   - ask_news_analyst: News sentiment analysis (headlines, sentiment scores, volatility).
   - ask_screener: Market screening (volume anomalies, top movers).
 
+  # Using named prompts (PREFERRED)
+  Each sub-agent exposes predefined analysis prompts. When a prompt matches the
+  user's request, always use it by passing `prompt_name` and `prompt_arguments`
+  instead of composing a free-form `question`. This ensures the sub-agent follows
+  a rigorous, reproducible workflow.
+
+  Available prompts per sub-agent:
+    ask_macd_analyst:
+      - full_macd_analysis        → prompt_arguments: {"symbol": "<TICKER>"}
+      - crossover_check           → prompt_arguments: {"symbol": "<TICKER>"}
+      - divergence_scan           → prompt_arguments: {"symbol": "<TICKER>"}
+      - macd_momentum_comparison  → prompt_arguments: {"symbols": "<TICKER1>,<TICKER2>"}
+    ask_rsi_analyst:
+      - full_rsi_analysis         → prompt_arguments: {"symbol": "<TICKER>"}
+      - overbought_oversold_scan  → prompt_arguments: {"symbol": "<TICKER>"}
+      - divergence_scan           → prompt_arguments: {"symbol": "<TICKER>"}
+      - failure_swing_detection   → prompt_arguments: {"symbol": "<TICKER>"}
+      - multi_timeframe_trend     → prompt_arguments: {"symbol": "<TICKER>"}
+    ask_pivot_analyst:
+      - full_pivot_analysis       → prompt_arguments: {"symbol": "<TICKER>"}
+      - pivot_interaction_check   → prompt_arguments: {"symbol": "<TICKER>"}
+    ask_fundamental_analyst:
+      - full_fundamental_analysis → prompt_arguments: {"symbol": "<TICKER>"}
+      - fundamental_comparison    → prompt_arguments: {"symbols": "<TICKER1>,<TICKER2>"}
+    ask_screener:
+      - daily_screening           → prompt_arguments: {"target_limit": "3"}
+    ask_news_analyst:
+      (no named prompts — use a free-form question)
+
+  Example tool call using a named prompt:
+    ask_macd_analyst(question="Full MACD analysis for AIR.PA", prompt_name="full_macd_analysis", prompt_arguments={"symbol": "AIR.PA"})
+
+  Fall back to a free-form `question` only when no named prompt fits the request.
+
   # Important usage
   - Call tools only by these exact names. Do not append channel markers or suffixes such as '<|channel|>commentary'.
 
