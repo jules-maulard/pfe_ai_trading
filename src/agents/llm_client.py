@@ -1,56 +1,145 @@
 from __future__ import annotations
 
-import logging
-from typing import Any, Dict, List
+import json
+from dataclasses import dataclass
+from typing import Any, Dict, List, Optional
+
+from langchain_github_copilot import ChatGitHubCopilot
 
 from ..utils import get_logger
+
 logger = get_logger(__name__)
 
-import litellm
-from litellm import Router
 
-litellm.suppress_debug_info = True
-logging.getLogger("LiteLLM").setLevel(logging.WARNING)
-logging.getLogger("LiteLLM Router").setLevel(logging.WARNING)
-logging.getLogger("LiteLLM Proxy").setLevel(logging.WARNING)
+# ─── Adapter classes to maintain OpenAI-style response interface ─────────────
+
+
+@dataclass
+class _Usage:
+    prompt_tokens: int
+    completion_tokens: int
+
+
+@dataclass
+class _FunctionCall:
+    name: str
+    arguments: str
+
+
+@dataclass
+class _ToolCall:
+    id: str
+    type: str
+    function: _FunctionCall
+
+
+@dataclass
+class _Message:
+    content: Optional[str]
+    tool_calls: Optional[List[_ToolCall]]
+
+    def model_dump(self) -> Dict[str, Any]:
+        data: Dict[str, Any] = {"content": self.content}
+        if self.tool_calls:
+            data["tool_calls"] = [
+                {
+                    "id": tc.id,
+                    "type": tc.type,
+                    "function": {
+                        "name": tc.function.name,
+                        "arguments": tc.function.arguments,
+                    },
+                }
+                for tc in self.tool_calls
+            ]
+        else:
+            data["tool_calls"] = None
+        return data
+
+
+@dataclass
+class _Choice:
+    message: _Message
+
+
+# ─── LLM Client ─────────────────────────────────────────────────────────────
 
 
 class LlmClient:
-    def __init__(self, api_keys: List[str], model: str, max_retries: int = 3, retry_delay: float = 1.0) -> None:
+    def __init__(self, api_key: str, model: str = "gpt-4o", **kwargs) -> None:
         self._model = model
-        model_list = self._build_model_list(api_keys, model)
-        self._router = Router(
-            model_list=model_list,
-            routing_strategy="least-busy",
-            num_retries=max(max_retries, len(api_keys)),
-            retry_after=retry_delay,
-            allowed_fails=1,
-            cooldown_time=60,
-        )
+        self._api_key = api_key
+        self._llm = ChatGitHubCopilot(model=model, api_key=api_key)
 
     async def get_response(
         self,
         messages: List[Dict[str, Any]],
         tools: List[Dict[str, Any]] | None = None,
     ):
-        kwargs: Dict[str, Any] = {"model": self._model, "messages": messages, "temperature": 0.0}
-        if tools:
-            kwargs["tools"] = tools
-            kwargs["tool_choice"] = "auto"
+        langchain_messages = self._convert_messages(messages)
 
-        response = await self._router.acompletion(**kwargs)
-        return response.choices[0], response.usage
+        llm = self._llm
+        if tools:
+            llm = llm.bind_tools(tools)
+
+        response = await llm.ainvoke(langchain_messages)
+
+        # Build adapter objects
+        tool_calls = None
+        if response.tool_calls:
+            tool_calls = [
+                _ToolCall(
+                    id=tc["id"],
+                    type="function",
+                    function=_FunctionCall(
+                        name=tc["name"],
+                        arguments=json.dumps(tc["args"]) if isinstance(tc["args"], dict) else tc["args"],
+                    ),
+                )
+                for tc in response.tool_calls
+            ]
+
+        message = _Message(
+            content=response.content if isinstance(response.content, str) else None,
+            tool_calls=tool_calls if tool_calls else None,
+        )
+
+        usage_meta = response.usage_metadata
+        usage = _Usage(
+            prompt_tokens=usage_meta.get("input_tokens", 0) if usage_meta else 0,
+            completion_tokens=usage_meta.get("output_tokens", 0) if usage_meta else 0,
+        )
+
+        return _Choice(message=message), usage
 
     @staticmethod
-    def _build_model_list(api_keys: List[str], model: str) -> List[Dict[str, Any]]:
-        litellm_model = f"groq/{model}"
-        return [
-            {
-                "model_name": model,
-                "litellm_params": {
-                    "model": litellm_model,
-                    "api_key": key,
-                },
-            }
-            for key in api_keys
-        ]
+    def _convert_messages(messages: List[Dict[str, Any]]) -> List:
+        from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
+
+        result = []
+        for msg in messages:
+            role = msg["role"]
+            content = msg.get("content") or ""
+            if role == "system":
+                result.append(SystemMessage(content=content))
+            elif role == "user":
+                result.append(HumanMessage(content=content))
+            elif role == "assistant":
+                tool_calls = msg.get("tool_calls")
+                if tool_calls:
+                    lc_tool_calls = [
+                        {
+                            "id": tc["id"],
+                            "name": tc["function"]["name"],
+                            "args": json.loads(tc["function"]["arguments"])
+                            if isinstance(tc["function"]["arguments"], str)
+                            else tc["function"]["arguments"],
+                        }
+                        for tc in tool_calls
+                    ]
+                    result.append(AIMessage(content=content, tool_calls=lc_tool_calls))
+                else:
+                    result.append(AIMessage(content=content))
+            elif role == "tool":
+                result.append(ToolMessage(content=content, tool_call_id=msg.get("tool_call_id", "")))
+        return result

@@ -47,13 +47,11 @@ async def build_agent(config_path: str, conversation_id: str | None = None) -> A
     configuration = Configuration.from_env(
         mcp_server_scripts=cfg.get("mcp_server_scripts", []),
         system_prompt=cfg.get("system_prompt", ""),
-        model=cfg.get("model", "openai/gpt-oss-20b"),
+        model=cfg.get("model", "gpt-4o"),
     )
     llm_client = LlmClient(
-        api_keys=configuration.api_keys,
+        api_key=configuration.api_key,
         model=configuration.model,
-        max_retries=configuration.max_retries,
-        retry_delay=configuration.retry_delay,
     )
     servers = [
         Server(

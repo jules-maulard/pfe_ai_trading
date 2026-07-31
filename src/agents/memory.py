@@ -3,8 +3,6 @@ from __future__ import annotations
 import logging
 from typing import Dict, List, Any
 
-import litellm
-
 from .entities import Message
 
 logger = logging.getLogger(__name__)
@@ -34,10 +32,8 @@ class Memory:
         return self._count_tokens(self.get_history())
 
     def _count_tokens(self, messages: List[Dict[str, Any]]) -> int:
-        try:
-            return litellm.token_counter(model="gpt-3.5-turbo", messages=messages)
-        except Exception:
-            return sum(len(m.get("content") or "") // 4 for m in messages)
+        # Approximate: ~4 chars per token
+        return sum(len(m.get("content") or "") // 4 for m in messages)
 
     # ─── Add / evict ─────────────────────────────────────────────────
 

@@ -13,5 +13,5 @@ system_prompt: |
   Cover as requested: income, margins, leverage, cash flow, dividends, ratios.
   Forbidden: buy/sell advice, step-by-step reasoning.
 
-model: "openai/gpt-oss-20b"
+model: "gpt-4o"
 agent_name: "Fundamental Agent"

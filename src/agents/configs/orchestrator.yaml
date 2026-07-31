@@ -88,5 +88,5 @@ system_prompt: |
   - Default to the past 12 months when no date range is specified by the user.
   - Add an optional "title" field for a human-readable chart title.
 
-model: "openai/gpt-oss-20b" # "groq/compound" or "openai/gpt-oss-20b"
+model: "gpt-4o"
 agent_name: "Orchestrator Agent"

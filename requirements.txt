@@ -2,7 +2,8 @@ yfinance
 pandas
 requests>=2.28
 fastmcp
-litellm
+langchain-core
+langchain-github-copilot
 python-dotenv
 pyyaml
 concurrent-log-handler

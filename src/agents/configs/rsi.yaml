@@ -13,5 +13,5 @@ system_prompt: |
   Cover as requested: extremes, divergences, failure swings, multi-timeframe.
   Forbidden: step-by-step reasoning.
 
-model: "openai/gpt-oss-20b"
+model: "gpt-4o"
 agent_name: "RSI MCP Agent"

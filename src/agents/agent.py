@@ -5,8 +5,6 @@ import json
 import re
 from typing import Any, Dict, List, Tuple
 
-import litellm
-
 from ..utils import get_logger
 logger = get_logger(__name__)
 
@@ -113,168 +111,13 @@ class Agent:
                     messages=self._memory.get_history(),
                     tools=tools,
                 )
-            except (litellm.RateLimitError, litellm.ServiceUnavailableError) as exc:
+            except Exception as exc:
                 msg_exc = str(exc)
-                wait = self._parse_retry_after(msg_exc)
-                if "no deployments available" in msg_exc.lower():
-                    logger.warning(
-                        "No deployments available — waiting %.1fs before retry", wait
-                    )
-                else:
-                    logger.warning(
-                        "Rate limit hit — waiting %.1fs before retry (TPM limit)", wait
-                    )
-                await asyncio.sleep(wait)
-                continue
-            except litellm.BadRequestError as exc:
-                # Log and print full exception for debugging parsing failures before any fix attempt.
-                try:
-                    logger.error("BadRequestError during LLM call: %s", exc)
-                    logger.debug("BadRequestError repr: %r", exc)
-                    # Also print to stdout for immediate terminal visibility.
-                    print("BadRequestError during LLM call:", repr(exc))
-                    print("BadRequestError args:", exc.args)
-                except Exception:
-                    logger.exception("Failed to log BadRequestError")
-
-                msg = str(exc)
-                # ── "Tool choice is none, but model called a tool" ──────────────
-                # Happens when we sent tools=None but the model still called one.
-                # Re-enable tools and retry without injecting anything.
-                if "tool choice is none" in msg.lower():
-                    logger.warning("tools=None but model called a tool — re-enabling tools and retrying.")
-                    _nudge_count = 0
-                    continue
-                # ── output_parse_failed ──────────────────────────────────────────
-                # Model produced unparseable output (usually context overflow).
-                # Do NOT disable tools — just retry; the model should self-correct.
-                if "parsing failed" in msg.lower() or "output_parse_failed" in msg.lower():
-                    _parse_fail_count += 1
-                    try:
-                        outer_match = re.search(r"GroqException - (\{.*\})", msg, re.DOTALL)
-                        if outer_match:
-                            outer = json.loads(outer_match.group(1))
-                            fg = outer.get("error", {}).get("failed_generation", "")
-                            if fg:
-                                logger.debug("failed_generation snippet: %s", fg[:300])
-                    except Exception:
-                        pass
-                    if _parse_fail_count >= _max_parse_fails:
-                        logger.warning(
-                            "Repeated parse failures (%d) — falling back to tool-free call.",
-                            _parse_fail_count,
-                        )
-                        try:
-                            fallback_msgs = self._memory.get_history()
-                            fallback_msgs = [
-                                m if isinstance(m, dict) else m
-                                for m in fallback_msgs
-                            ]
-                            fallback_msgs.append({
-                                "role": "user",
-                                "content": (
-                                    "You have failed to produce a parseable response multiple times. "
-                                    "Do NOT call any tools. "
-                                    "Write your best analysis and recommendation based on data already gathered above."
-                                ),
-                            })
-                            fb_choice, fb_usage = await self._llm_client.get_response(
-                                messages=fallback_msgs
-                            )
-                            if fb_usage:
-                                self._token_monitor.record(
-                                    fb_usage.prompt_tokens, fb_usage.completion_tokens
-                                )
-                            fb_content = (fb_choice.message.content or "").strip()
-                            if fb_content:
-                                _parse_fail_count = 0
-                                return fb_content
-                        except Exception as fb_exc:
-                            logger.warning("Fallback call failed: %s", fb_exc)
-                        _parse_fail_count = 0
-                        continue
-                    logger.warning(
-                        "Model output parsing failed (attempt %d/%d) — injecting format reminder.",
-                        _parse_fail_count,
-                        _max_parse_fails,
-                    )
-                    self._memory.add_message(Message(
-                        role="user",
-                        content=(
-                            "Your previous response could not be parsed. "
-                            "Return ONLY a valid tool call or plain text — "
-                            "no reasoning traces, no markdown fences, no extra tokens."
-                        ),
-                    ))
-                    continue
-                # ── tool call validation failed (wrong tool name) ────────────────
-                if "tool call validation failed" in msg.lower() or "Tool call validation failed" in msg:
-                    bad_tool = re.search(r"attempted to call tool '([^']+)'", msg)
-                    bad_name = bad_tool.group(1) if bad_tool else "unknown"
-                    valid_names = [t["function"]["name"] for t in self._toolbox.get_openai_tools()]
-
-                    # Attempt fuzzy auto-correction before asking the model to retry
-                    corrected = self._fuzzy_match_tool(bad_name, valid_names)
-                    if corrected:
-                        logger.warning(
-                            "Auto-corrected tool name '%s' → '%s'", bad_name, corrected
-                        )
-                        # Extract the failed_generation JSON from the error message and
-                        # parse the arguments properly (regex on nested JSON is unreliable)
-                        args_str = "{}"
-                        try:
-                            # The error message contains: GroqException - {...JSON...}
-                            outer_match = re.search(r"GroqException - (\{.*\})", msg, re.DOTALL)
-                            if outer_match:
-                                outer = json.loads(outer_match.group(1))
-                                fg_raw = outer.get("error", {}).get("failed_generation", "")
-                                if fg_raw:
-                                    fg_obj = json.loads(fg_raw)
-                                    fn_args = fg_obj.get("arguments", {})
-                                    # Normalise symbol casing to uppercase so the
-                                    # service layer resolves them correctly (e.g. AIR.Pa → AIR.PA)
-                                    if "symbols" in fn_args and isinstance(fn_args["symbols"], list):
-                                        fn_args["symbols"] = [s.upper() for s in fn_args["symbols"]]
-                                    args_str = json.dumps(fn_args)
-                        except Exception as parse_exc:
-                            logger.debug("Could not parse failed_generation args: %s", parse_exc)
-                        tool_result = await self._toolbox.execute_tool_by_name(corrected, args_str)
-                        # Inject a structurally correct assistant + tool pair so the
-                        # LLM sees the call as already completed and does not repeat it.
-                        fake_call_id = f"auto_{corrected}"
-                        self._memory.add_message(Message(
-                            role="assistant",
-                            content=None,
-                            tool_calls=[{
-                                "id": fake_call_id,
-                                "type": "function",
-                                "function": {
-                                    "name": corrected,
-                                    "arguments": args_str,
-                                },
-                            }],
-                        ))
-                        self._memory.add_message(Message(
-                            role="tool",
-                            content=tool_result,
-                            tool_call_id=fake_call_id,
-                        ))
-                        continue
-
-                    # No fuzzy match found — fall back to asking model to retry
-                    logger.warning(
-                        "Model tried invalid tool '%s'. Valid tools: %s. Injecting correction.",
-                        bad_name,
-                        valid_names,
-                    )
-                    self._memory.add_message(Message(
-                        role="user",
-                        content=(
-                            f"The tool '{bad_name}' does not exist. "
-                            f"You must only call tools from this exact list: {valid_names}. "
-                            "Please retry your previous step using the correct tool name."
-                        ),
-                    ))
+                # Rate limit / service unavailable — retry with backoff
+                if "rate" in msg_exc.lower() or "429" in msg_exc or "503" in msg_exc:
+                    wait = self._parse_retry_after(msg_exc)
+                    logger.warning("Rate limit or service error — waiting %.1fs before retry", wait)
+                    await asyncio.sleep(wait)
                     continue
                 raise
             if usage:

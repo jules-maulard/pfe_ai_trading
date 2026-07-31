@@ -52,7 +52,7 @@ class Tool:
 
 @dataclass
 class Configuration:
-    api_keys: List[str]
+    api_key: str
     model: str
     mcp_server_scripts: List[str] = field(default_factory=list)
     system_prompt: str = ""
@@ -65,21 +65,15 @@ class Configuration:
         cls,
         mcp_server_scripts: List[str] | None = None,
         system_prompt: str = "",
-        model: str = "openai/gpt-oss-20b",
+        model: str = "gpt-4o",
     ) -> Configuration:
         load_dotenv(Path(__file__).resolve().parents[2] / ".env")
-        api_keys = cls._load_api_keys()
+        api_key = os.environ.get("GITHUB_TOKEN", "")
+        if not api_key:
+            raise RuntimeError("GITHUB_TOKEN not found. Add it to .env at repository root.")
         return cls(
-            api_keys=api_keys,
+            api_key=api_key,
             model=model,
             mcp_server_scripts=mcp_server_scripts or [],
             system_prompt=system_prompt,
         )
-
-    @staticmethod
-    def _load_api_keys() -> List[str]:
-        raw = os.environ.get("GROQ_API_KEYS", "")
-        if raw:
-            return [k.strip() for k in raw.split(",") if k.strip()]
-        single = os.environ.get("GROQ_API_KEY", "")
-        return [single] if single else []

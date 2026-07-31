@@ -16,5 +16,5 @@ system_prompt: |
   - Keep the response short and actionable.
   - Never invent or assume company names — use ticker symbols only unless explicitly returned by a MCP tool.
 
-model: "openai/gpt-oss-20b"
+model: "gpt-4o"
 agent_name: "Screener Agent"

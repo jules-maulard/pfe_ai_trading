@@ -34,7 +34,7 @@ async def run_sub_agent(
     cfg = _load_agent_config(config_name)
     system_prompt = cfg.get("system_prompt", "")
     mcp_server_scripts = cfg.get("mcp_server_scripts", [])
-    model = cfg.get("model", "openai/gpt-oss-20b")
+    model = cfg.get("model", "gpt-4o")
 
     configuration = Configuration.from_env(
         mcp_server_scripts=mcp_server_scripts,
@@ -42,10 +42,8 @@ async def run_sub_agent(
         model=model,
     )
     llm_client = LlmClient(
-        api_keys=configuration.api_keys,
+        api_key=configuration.api_key,
         model=configuration.model,
-        max_retries=configuration.max_retries,
-        retry_delay=configuration.retry_delay,
     )
     servers = [
         Server(

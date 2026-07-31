@@ -21,7 +21,7 @@ async def run_from_config(config_path: str) -> None:
     mcp_server_scripts = cfg.get("mcp_server_scripts", [])
     system_prompt = cfg.get("system_prompt")
     agent_name = cfg.get("agent_name")
-    model = cfg.get("model", "openai/gpt-oss-20b")
+    model = cfg.get("model", "gpt-4o")
 
     configuration = Configuration.from_env(
         mcp_server_scripts=mcp_server_scripts,
@@ -30,10 +30,8 @@ async def run_from_config(config_path: str) -> None:
     )
 
     llm_client = LlmClient(
-        api_keys=configuration.api_keys,
+        api_key=configuration.api_key,
         model=configuration.model,
-        max_retries=configuration.max_retries,
-        retry_delay=configuration.retry_delay,
     )
     servers = [
         Server(
